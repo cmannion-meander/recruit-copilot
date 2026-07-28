@@ -1,0 +1,48 @@
+/* Recruit Copilot — brand tokens
+ *
+ * Paste this into v0 as part of the prompt, and keep it as the source of truth in the repo.
+ * Derived from the brand book, July 2026.
+ */
+
+:root {
+  /* Ink and paper */
+  --rc-ink:            #12171F;  /* primary text, dark surfaces */
+  --rc-ink-secondary:  #39424F;
+  --rc-ink-muted:      #6C7583;
+  --rc-paper:          #F6F5F2;  /* page background */
+  --rc-paper-sunk:     #EDEBE6;  /* cards, wells, table stripes */
+  --rc-rule:           #DCD9D2;  /* hairlines */
+
+  /* Semantic — these two colours carry meaning and are never decorative */
+  --rc-evidenced:      #0E6C89;  /* a finding supported by a quoted passage */
+  --rc-evidenced-tint: #CFE4EB;
+  --rc-open:           #8B5A11;  /* not found; stays open for interview */
+  --rc-open-tint:      #F1E2C2;
+
+  /* Type */
+  --rc-font-sans:  "IBM Plex Sans", system-ui, sans-serif;
+  --rc-font-mono:  "IBM Plex Mono", ui-monospace, monospace;
+  --rc-font-serif: "IBM Plex Serif", Georgia, serif; /* quoted candidate passages ONLY */
+
+  /* Scale (px): 12 14 16 18 22 28 36 48 — nothing between, nothing below 16 for body */
+  --rc-radius: 3px;   /* near-square. No pill shapes, no large radii. */
+}
+
+/* Required wherever numbers align in a column or are compared across rows. */
+.rc-tabular { font-variant-numeric: tabular-nums; }
+
+/* Tailwind mapping, if using @theme (v4):
+ *   --color-ink, --color-paper, --color-evidenced, --color-open, etc.
+ * If using tailwind.config (v3), map the same names under theme.extend.colors.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Rules the tokens cannot enforce on their own
+ *
+ * 1. Colour is never the only signal for a state. Every state has a shape and a
+ *    label as well. Must survive greyscale and colourblind rendering.
+ * 2. --rc-evidenced and --rc-open are semantic. Never use them as accent or
+ *    decoration; if teal appears somewhere that isn't about evidence, it's wrong.
+ * 3. No gradients. Flat fills only.
+ * 4. Body text never below 16px, never under 4.5:1 contrast.
+ * --------------------------------------------------------------------------- */

@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Brand tokens — source of truth is brand/tokens.css.
+ * --color-evidenced and --color-open are semantic. They are never decoration:
+ * if teal appears somewhere that is not about evidence, it is wrong. */
+@theme {
+  --color-ink: #12171f;
+  --color-ink-secondary: #39424f;
+  --color-ink-muted: #6c7583;
+  --color-paper: #f6f5f2;
+  --color-paper-sunk: #edebe6;
+  --color-rule: #dcd9d2;
+
+  --color-evidenced: #0e6c89;
+  --color-evidenced-tint: #cfe4eb;
+  --color-open: #8b5a11;
+  --color-open-tint: #f1e2c2;
+
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* Scale (px): 12 14 16 18 22 28 36 48. Nothing between; nothing below 16 for body. */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+
+  /* Near-square. No pill shapes, no large radii. */
+  --radius-rc: 3px;
+}
+
+html {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Required wherever numbers align in a column or are compared across rows. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,125 @@
+# This repository is shared publicly and screen-shared. Everything below is either a
+# credential, personal data, or a machine-local identifier that should not leave this laptop.
+# Ignoring a file does not redact one already committed — check `git log -p` before assuming.
+
+# ---------------------------------------------------------------------------------------
+# Secrets
+# ---------------------------------------------------------------------------------------
+# All configuration comes from environment variables (CLAUDE.md), which means every real
+# value lives in a .env the repo must never see. The .example files are the documentation.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*.jks
+id_rsa*
+id_ed25519*
+*.asc
+*.gpg
+
+# Cloud CLI state. `az login` writes tokens and subscription ids under .azure; azd writes
+# the resource ids and any secret app settings of a provisioned environment under .azure/<env>.
+.azure/
+.aws/
+.gcloud/
+credentials.json
+service-account*.json
+*.publishsettings
+*.azurePubxml
+
+# ---------------------------------------------------------------------------------------
+# Candidate data
+# ---------------------------------------------------------------------------------------
+# This is an applicant tracking system. Every uploaded document is a real person's CV, and a
+# CV carries name, address, phone, and employment history. None of it is test data, none of
+# it is ours to publish, and a public repo is not a lawful place to store it. Fixtures used
+# in tests must be synthetic and named as such.
+.media/
+media/
+uploads/
+storage/
+*.sqlite3
+*.dump
+*.sql.gz
+db/backups/
+tests/fixtures/real/
+
+# ---------------------------------------------------------------------------------------
+# Our provisioning, not anyone else's
+# ---------------------------------------------------------------------------------------
+# These record how *this* deployment was built: Azure App Service, a specific subscription's
+# per-region VM quota, a domain whose DNS is a Squarespace web form. Someone running on AWS
+# or purely locally would be copying decisions that do not apply and inheriting resource
+# names, an inbound IP, and a domain verification id that are ours. Kept on disk, not shared.
+#
+# `docs/decisions/` rather than `docs/`, deliberately: CLAUDE.md places invariants.md,
+# data-model.md, and slices.md under docs/, and those are the contract — the files a public
+# reader most needs. A blanket docs/ rule would swallow them the day they are moved there,
+# and git will not warn you, because it does not descend into an ignored directory to find
+# a negation.
+infra/
+docs/decisions/*
+
+# 0001 is the exception: it establishes the convention rather than recording any deployment,
+# names no provider, and CLAUDE.md — which does ship — instructs a reader to record ADRs
+# here. Publishing it keeps that instruction true and the directory non-empty. Written as
+# `docs/decisions/*` rather than `docs/decisions/` so this negation is reachable at all;
+# git does not descend into an ignored directory to evaluate one.
+!docs/decisions/0001-record-architecture-decisions.md
+
+# ---------------------------------------------------------------------------------------
+# Machine-local editor state
+# ---------------------------------------------------------------------------------------
+# .vscode/settings.json holds appService.defaultWebAppToDeploy, which is a full ARM resource
+# path — it names the Azure subscription id, the resource group, and the site. That is an
+# addressing detail for our tenant, not a project setting, and it changes per machine.
+# deployment.md tells a contributor how to set deploySubpath for themselves.
+.vscode/
+.idea/
+*.code-workspace
+.claude/settings.local.json
+
+# ---------------------------------------------------------------------------------------
+# Python — api/
+# ---------------------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+staticfiles/
+
+# ---------------------------------------------------------------------------------------
+# Node — web/ (web/.gitignore covers the same ground from inside; this is the safety net)
+# ---------------------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.turbo/
+.vercel/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------------------------------
+# OS and scratch
+# ---------------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+scratch/
+tmp/
