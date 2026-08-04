@@ -1,49 +1,111 @@
 @import "tailwindcss";
 
-/* Brand tokens — source of truth is brand/tokens.css.
- * --color-evidenced and --color-open are semantic. They are never decoration:
- * if teal appears somewhere that is not about evidence, it is wrong. */
-@theme {
-  --color-ink: #12171f;
-  --color-ink-secondary: #39424f;
-  --color-ink-muted: #6c7583;
-  --color-paper: #f6f5f2;
-  --color-paper-sunk: #edebe6;
-  --color-rule: #dcd9d2;
+/* brand/tokens.css is the source of truth for colour, type and radius. tokens.css
+ * is a checked copy of it (see scripts/tokens.mjs); tokens-derived.css holds the
+ * few values the book has no entry for. Nothing below this line is a literal
+ * colour — every utility resolves to an --rc-* variable. */
+@import "./tokens.css";
+@import "./tokens-derived.css";
 
-  --color-evidenced: #0e6c89;
-  --color-evidenced-tint: #cfe4eb;
-  --color-open: #8b5a11;
-  --color-open-tint: #f1e2c2;
+@theme inline {
+  /* next/font first, then a locally installed Plex, then the book's own fallbacks. */
+  --font-sans: var(--font-plex-sans), var(--rc-font-sans);
+  --font-mono: var(--font-plex-mono), var(--rc-font-mono);
+  --font-serif: var(--font-plex-serif), var(--rc-font-serif);
 
-  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* The scale is closed: 12 · 14 · 16 · 18 · 22 · 28 · 36 · 48, nothing between.
+   * Named by pixel size so an off-scale value has no class to hide behind. */
+  --text-12: 12px;
+  --text-12--line-height: 1.5;
+  --text-14: 14px;
+  --text-14--line-height: 1.5;
+  --text-16: 16px;
+  --text-16--line-height: 1.6;
+  --text-18: 18px;
+  --text-18--line-height: 1.55;
+  --text-22: 22px;
+  --text-22--line-height: 1.4;
+  --text-28: 28px;
+  --text-28--line-height: 1.25;
+  --text-36: 36px;
+  --text-36--line-height: 1.15;
+  --text-48: 48px;
+  --text-48--line-height: 1.05;
 
-  /* Scale (px): 12 14 16 18 22 28 36 48. Nothing between; nothing below 16 for body. */
-  --text-2xs: 0.75rem;
-  --text-xs: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.375rem;
-  --text-2xl: 1.75rem;
-  --text-3xl: 2.25rem;
-  --text-4xl: 3rem;
+  --color-ink: var(--rc-ink);
+  --color-ink-secondary: var(--rc-ink-secondary);
+  --color-ink-muted: var(--rc-ink-muted);
+  --color-ink-strong: var(--rc-ink-strong);
+  --color-ink-inverse: var(--rc-ink-inverse);
+  --color-paper: var(--rc-paper);
+  --color-paper-sunk: var(--rc-paper-sunk);
+  --color-paper-raised: var(--rc-paper-raised);
+  --color-rule: var(--rc-rule);
+  --color-rule-strong: var(--rc-rule-strong);
+  --color-rule-control: var(--rc-rule-control);
+  --color-rule-inverse: var(--rc-rule-inverse);
 
-  /* Near-square. No pill shapes, no large radii. */
-  --radius-rc: 3px;
+  /* Semantic. Never accent, never decoration. */
+  --color-evidenced: var(--rc-evidenced);
+  --color-evidenced-tint: var(--rc-evidenced-tint);
+  --color-evidenced-on-ink: var(--rc-evidenced-on-ink);
+  --color-open: var(--rc-open);
+  --color-open-tint: var(--rc-open-tint);
+  --color-open-on-ink: var(--rc-open-on-ink);
+
+  /* One radius. `rounded-rc` is the only rounding utility this app should use. */
+  --radius-rc: var(--rc-radius);
 }
 
-html {
-  background-color: var(--color-paper);
-  color: var(--color-ink);
-}
+@layer base {
+  :root {
+    color-scheme: light;
+  }
 
-body {
-  font-size: var(--text-base);
-  -webkit-font-smoothing: antialiased;
-}
+  /* Tailwind defaults border-color to currentColor, which puts ink-coloured edges
+   * on anything that writes `border` without a colour. The hairline is the default
+   * here because that is what a well-set document uses. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--rc-rule);
+  }
 
-/* Required wherever numbers align in a column or are compared across rows. */
-.tabular {
-  font-variant-numeric: tabular-nums;
+  html {
+    background-color: var(--rc-paper);
+    color: var(--rc-ink);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: 16px; /* the floor for body text, per the book */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Required wherever figures align in a column or are compared across rows.
+   * .rc-tabular is the book's name; .tabular is the local alias. */
+  .tabular,
+  .rc-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The small mono label used for section eyebrows, states and column heads. */
+  .rc-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* Honeypot container: off-screen, deliberately not display:none — a field that
+   * is display:none is skipped by the bots worth catching. */
+  .rc-offscreen {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
 }

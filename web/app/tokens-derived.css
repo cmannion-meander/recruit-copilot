@@ -1,0 +1,35 @@
+/* Extensions to the brand palette.
+ *
+ * These are NOT in the brand book. They exist because the book has no entries for
+ * hairlines on an ink surface, hover states on ink fills, control edges, or the two
+ * semantic colours rendered on dark. Every value here keeps the book's rules — flat
+ * fill, 3px radius, and the contrast floors below — and is a candidate for the next
+ * revision of the book rather than a private palette.
+ *
+ * Every ratio below is measured, not estimated. Text targets 4.5:1; a control edge
+ * or a graphical object carrying meaning targets 3:1; a purely decorative hairline
+ * has no floor but still has to be visible.
+ *
+ * --rc-evidenced and --rc-open remain semantic on dark exactly as they are on paper:
+ * they mean "supported by a quoted passage" and "not found, still open", never accent.
+ */
+
+:root {
+  /* Ink and paper */
+  --rc-ink-strong: #080b10; /* pressed/hover on an ink fill */
+  --rc-ink-inverse: var(--rc-paper); /* 16.5:1 on --rc-ink */
+  --rc-paper-raised: #ffffff; /* a card lifted off --rc-paper */
+
+  /* Rules.
+   * Two distinct jobs, deliberately two tokens. A card outline is decoration and
+   * may be faint; the edge of a text input is how the control is located and may
+   * not be. Collapsing them is how the second one ends up at 1.7:1. */
+  --rc-rule-strong: #c2beb5; /* card and panel outlines — decorative, 1.7:1 */
+  --rc-rule-control: #948d7e; /* input and select edges — 3.02:1 on paper, 3.30:1 on raised */
+  --rc-rule-inverse: #434c5e; /* hairline on --rc-ink — 2.08:1, visible, still a hairline */
+
+  /* Evidence on an ink surface. The book's #0E6C89 reaches 1.9:1 on --rc-ink and is
+   * unreadable there, so the dark section needs its own pair. */
+  --rc-evidenced-on-ink: #5fb4ce; /* 7.62:1 on --rc-ink */
+  --rc-open-on-ink: #e0ae55; /* 8.87:1 on --rc-ink */
+}

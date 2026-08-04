@@ -6,13 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "biome check .",
-    "typecheck": "tsc --noEmit"
+    "lint": "node scripts/tokens.mjs && biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "tokens": "node scripts/tokens.mjs --write",
+    "icons": "python3 scripts/icon.py"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "next": "^15.5.4",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

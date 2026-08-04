@@ -73,6 +73,15 @@ docs/decisions/*
 # git does not descend into an ignored directory to evaluate one.
 !docs/decisions/0001-record-architecture-decisions.md
 
+# 0008 and 0009 are exceptions for a different reason: neither records a deployment. 0008
+# darkens a brand colour that failed the contrast floor the brand book itself sets, and is
+# cited from brand/tokens.css, which ships. 0009 explains why the capture endpoint speaks one
+# email provider's API instead of the generic transport, and is cited from the capture route,
+# which also ships. Holding them back leaves two public files pointing at reasoning nobody
+# can read. They name no resource, hostname, region or subscription.
+!docs/decisions/0008-ink-muted-darkened-to-meet-the-contrast-floor.md
+!docs/decisions/0009-captures-go-to-mailjet.md
+
 # ---------------------------------------------------------------------------------------
 # Machine-local editor state
 # ---------------------------------------------------------------------------------------

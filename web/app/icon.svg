@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Recruit Copilot">
+  <title>Recruit Copilot</title>
+  <!-- GENERATED — run scripts/icon.py rather than editing by hand.
+       A rule beside a quoted passage: the citation the product produces.
+       Colours are --rc-ink, --rc-evidenced-on-ink and --rc-paper. -->
+  <rect width="32" height="32" rx="3" fill="#12171F" />
+  <rect x="6.08" y="8" width="1.92" height="16" fill="#5FB4CE" />
+  <rect x="10.88" y="8.96" width="15.04" height="2" fill="#F6F5F2" />
+  <rect x="10.88" y="15.04" width="12.16" height="2" fill="#F6F5F2" />
+  <rect x="10.88" y="21.12" width="8.96" height="2" fill="#F6F5F2" />
+</svg>

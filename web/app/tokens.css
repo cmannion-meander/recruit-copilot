@@ -1,3 +1,11 @@
+/* GENERATED FILE — do not edit.
+ *
+ * Verbatim copy of brand/tokens.css, which is the source of truth.
+ * The copy exists because App Service deploys the web/ subtree alone, so a
+ * build-time import of ../brand/tokens.css would resolve locally and fail in
+ * production. `pnpm tokens` rewrites it; `pnpm lint` fails if it has drifted.
+ */
+
 /* Recruit Copilot — brand tokens
  *
  * Paste this into v0 as part of the prompt, and keep it as the source of truth in the repo.
