@@ -9,12 +9,19 @@ Ordering principle: database constraint > application validation > convention.
 
 ## 1. Rubric before pipeline
 
-A role cannot receive candidates until The Brief defines at least three criteria.
+A role cannot receive candidates until The Brief defines at least three criteria **and every
+one of them is assigned to the stage that will evidence it**.
 
 **Enforcement.** `Role.state` is a state machine: `draft → open → closed`. Transition to `open`
-raises unless `criteria.count() >= 3`. `Candidacy` and `Search` both have a database trigger
-rejecting insert where the parent role is not `open`. The Brief is versioned; opening a role
-pins a `BriefVersion`, and both `Search` and `Review` pin the version they ran against.
+raises unless `criteria.count() >= 3`, and raises again unless every criterion appears in some
+`BriefStage.criterion_ids` at or before the submitting stage. `Candidacy` and `Search` both have
+a database trigger rejecting insert where the parent role is not `open`. The Brief is versioned;
+opening a role pins a `BriefVersion`, and both `Search` and `Review` pin the version they ran
+against.
+
+The coverage half arrived from the structured hiring process (ADR 0011). A criterion nobody has
+agreed to look for is the same failure as a criterion nobody wrote down: it gets asked about by
+whoever remembers, or not at all, and the Submission Record has a line for it either way.
 
 ---
 
@@ -32,11 +39,18 @@ The count never renders without the cells.
 
 ## 3. No advancement without a scorecard
 
-A candidate cannot move to a later stage while any criterion in the pinned Brief version has
-no Finding.
+A candidate cannot leave a stage while any criterion **that stage is responsible for** has no
+Finding. The whole rubric is required once, at submission — invariant 5.
 
 **Enforcement.** Stage transition validator raises `IncompleteScorecard`, naming the criteria
-with no entry.
+with no entry. `Review` carries a `stage_id`: one scorecard per stage, not one per candidacy.
+
+**This was corrected, not weakened.** As first written the rule read "any criterion in the
+pinned Brief version", which makes the first transition impossible — you contact somebody in
+order to learn the things, and nobody can leave Sourced with five findings already recorded. A
+rule that cannot be satisfied is not enforced by a trigger, it is worked around by a colleague.
+The requirement that every criterion carries a finding before the record leaves the building is
+unchanged; it now lives at the point where it is true. See ADR 0011.
 
 ---
 
@@ -59,10 +73,23 @@ recorded resolution or an `Override` carrying a user and a written reason.
 ## 6. Ghosting is impossible
 
 Every `Candidacy` carries an auto-closure deadline. On expiry a scheduled task closes it
-with a reason and notifies the candidate.
+with a reason and notifies the candidate. **A candidacy cannot leave a stage until the candidate
+has been told they reached it.**
 
 **Enforcement.** `Candidacy.auto_close_at` is `NOT NULL`, defaulted on insert. A periodic
-task closes anything past deadline. There is no setting to disable it.
+task closes anything past deadline. There is no setting to disable it. Every `BriefStage`
+carries a non-nullable `candidate_message`, and the stage transition validator raises if no
+`CandidateMessage` exists for the stage being left.
+
+The second sentence is new and is the strongest opinion in the document, because it costs the
+recruiter something on every transition. It is here because a deadline alone does not deliver
+the promise: somebody who hears nothing for six weeks and then receives an automated closure
+has still been ghosted, politely. A stage with nothing to say to the candidate is a stage where
+somebody goes quiet.
+
+**What a candidate reads is what was written.** There is no internal version of a message and
+no second, softer text for the rejection — `Decision.reason_text` is sent verbatim. One text
+and one audience is the only arrangement in which writing it honestly is the easy path.
 
 ---
 

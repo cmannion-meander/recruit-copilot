@@ -34,9 +34,19 @@ If he would hesitate, it is wrong.
 | Integrity signal layer | **Crosscheck** | Identity Verification, Fraud Check, Trust Score |
 | Free scan (acquisition surface) | **Pre-flight** | Free Scan, Instant Insights, Quick Look, Demo |
 | Client-facing output | **Submission Record** | Candidate Report, Match Summary, Profile |
+| Where each criterion is evidenced | **The Brief**, in its stages | Interview Plan, Stage Config, Scorecard Template |
+| One scorecard, at one stage | **Review** | Interview Feedback, Assessment, Stage Score |
+| Where a candidacy came from | **Channel** | Source, Origin, Lead Source |
+| What the candidate was told | **Message** | Notification, Comms, Touchpoint |
+| After the start date | **Placement**, with **Checkpoints** | Onboarding, 30/60/90, Aftercare |
 
 These names appear in code identifiers, table names, API routes, and UI strings. Do not
 introduce synonyms. Never say "fraud check" to or about a candidate.
+
+**The Brief says two things**: what must be evidenced, and where each one is evidenced. Both are
+versioned together and repinned together, because moving a criterion to a later stage changes
+what the assessment is. The sourcing scope is *not* in The Brief — widening where you look
+changes nothing about what anyone is assessed against. See ADR 0011.
 
 ---
 
@@ -63,7 +73,13 @@ Robots, faces, mascots, anything with eyes.
 **Never show a number that judges:** gauges, dials, speedometers, ring charts. Percentages,
 letter grades, stars, out-of-ten. Traffic lights or red/amber/green rows. "Top match",
 "best fit", ranked leaderboards. Any single figure standing in for a person. Progress bars
-filled by an evaluation.
+filled by an evaluation. **Stack rankings** of candidates at a stage. **Quality of hire** —
+it is a score attached to a named individual, applied retrospectively, and it is the same
+object this list refuses at the front of the process wearing a different hat.
+
+Process figures are a different thing and are allowed: how many reached a stage, how long a
+role took to fill, which channel produced them. They judge the desk, never the person. Render
+them as counts and count pairs — "6 of 10 reached the screening call" — never as a rate.
 
 **Never write:** a sentence where the system thinks, believes, or recommends. A finding
 without a quoted passage beside it. An exclamation mark on a candidate-facing screen.

@@ -294,6 +294,12 @@ export function SearchScreen({ roleId }: { roleId: string }) {
                               type: "create_candidacy",
                               person_id: person.id,
                               role_id: role.id,
+                              /* The channel a sighting came from is the run that found
+                               * it, not a field somebody types afterwards. */
+                              channel_id:
+                                sighting.source_kind === "Trade press article"
+                                  ? "chn_trade_press"
+                                  : "chn_company_sites",
                             })
                           }
                         >

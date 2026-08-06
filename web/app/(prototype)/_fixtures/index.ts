@@ -8,20 +8,26 @@
  * There is no persistence anywhere in this prototype: no localStorage, no
  * sessionStorage, no cookie, no fetch. See docs/decisions/0010.
  */
-import { candidacies, stages } from "./candidacies";
+import { candidacies, terminalStages } from "./candidacies";
+import { channels } from "./channels";
 import { crosscheckSignals } from "./crosscheck";
 import { decisionEvents, decisions, exclusions } from "./decisions";
 import { documents } from "./documents";
+import { candidateMessages } from "./messages";
 import { clients, contacts, organization, users } from "./organisation";
 import { people, sightings } from "./people";
+import { placementCheckpoints, placements } from "./placements";
 import { evidence, findings, reviews } from "./reviews";
-import { briefs, briefVersions, criteria, roles, sourcingScopes } from "./roles";
+import { briefStages, briefs, briefVersions, criteria, roles, sourcingScopes } from "./roles";
 import { searches } from "./searches";
 import { submissionRecords } from "./submissions";
 import type {
   Brief,
+  BriefStage,
   BriefVersion,
   Candidacy,
+  CandidateMessage,
+  Channel,
   Client,
   Contact,
   Criterion,
@@ -34,6 +40,8 @@ import type {
   Finding,
   Organization,
   Person,
+  Placement,
+  PlacementCheckpoint,
   Review,
   Role,
   Search,
@@ -53,12 +61,19 @@ export type PrototypeState = {
   briefs: Brief[];
   briefVersions: BriefVersion[];
   criteria: Criterion[];
+  /** The Brief also says where each criterion is evidenced. Versioned with it. */
+  briefStages: BriefStage[];
   sourcingScopes: SourcingScope[];
+  channels: Channel[];
   searches: Search[];
   people: Person[];
   sightings: Sighting[];
-  stages: Stage[];
+  /** Terminal outcomes only. Pipeline stages live on the BriefVersion. */
+  terminalStages: Stage[];
   candidacies: Candidacy[];
+  candidateMessages: CandidateMessage[];
+  placements: Placement[];
+  placementCheckpoints: PlacementCheckpoint[];
   documents: Document[];
   reviews: Review[];
   findings: Finding[];
@@ -79,12 +94,17 @@ export const initialState: PrototypeState = {
   briefs,
   briefVersions,
   criteria,
+  briefStages,
   sourcingScopes,
+  channels,
   searches,
   people,
   sightings,
-  stages,
+  terminalStages,
   candidacies,
+  candidateMessages,
+  placements,
+  placementCheckpoints,
   documents,
   reviews,
   findings,

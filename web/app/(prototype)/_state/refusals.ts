@@ -20,6 +20,17 @@
  */
 import type { PrototypeState } from "../_fixtures";
 import type { CandidacyId, ReasonCode, RoleId } from "../_fixtures/types";
+import {
+  candidacyById,
+  criteriaAtStage,
+  criteriaFor,
+  findingsFor,
+  latestBriefVersion,
+  messageSentAtStage,
+  nextStage,
+  stageOf,
+  stagesFor,
+} from "./selectors";
 
 export type RefusalItem = { label: string; detail?: string };
 
@@ -38,13 +49,71 @@ export type Refusal = {
 
 const MINIMUM_CRITERIA = 3;
 
-function criteriaFor(state: PrototypeState, briefVersionId: string) {
-  return state.criteria
-    .filter((criterion) => criterion.brief_version_id === briefVersionId)
-    .sort((left, right) => left.position - right.position);
+/* ── Invariant 1 · rubric before pipeline ────────────────────────────────────────
+ * Two conditions, in order. Three criteria is the count The Brief has always had to
+ * meet. Coverage is the second half, and it arrived with the structured process: a
+ * criterion assigned to no stage is a criterion nobody has agreed to look for, which
+ * is the same failure as not writing it down. See ADR 0011.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+function refuseOpen(state: PrototypeState, roleId: RoleId): Refusal | null {
+  const role = state.roles.find((candidate) => candidate.id === roleId);
+  if (!role) return null;
+
+  const version = latestBriefVersion(state, role);
+  if (!version) return null;
+
+  const criteria = criteriaFor(state, version.id);
+  const short = MINIMUM_CRITERIA - criteria.length;
+
+  if (short > 0) {
+    return {
+      requirement: "This role can't open until The Brief defines three criteria.",
+      reason: criteria.length === 1 ? "The Brief has one." : `The Brief has ${criteria.length}.`,
+      action:
+        short === 1
+          ? "Add the third criterion, then assign each one to the stage that evidences it."
+          : `Add ${short} more criteria, then assign each one to the stage that evidences it.`,
+      invariant: 1,
+    };
+  }
+
+  const stages = stagesFor(state, version.id);
+  const covered = new Set(stages.flatMap((stage) => stage.criterion_ids));
+  const uncovered = criteria.filter((criterion) => !covered.has(criterion.id));
+
+  if (stages.length === 0) {
+    return {
+      requirement: "This role can't open until The Brief says where each criterion is evidenced.",
+      reason: "No stages are defined.",
+      action: "Set out the stages this role runs, and assign every criterion to one of them.",
+      items: criteria.map((criterion) => ({
+        label: criterion.text,
+        detail: `Criterion ${criterion.position} · assigned to no stage`,
+      })),
+      invariant: 1,
+    };
+  }
+
+  if (uncovered.length > 0) {
+    return {
+      requirement: "This role can't open until every criterion is evidenced somewhere.",
+      reason:
+        uncovered.length === 1
+          ? "One criterion is assigned to no stage."
+          : `${uncovered.length} criteria are assigned to no stage.`,
+      action: "Assign each to the stage that will evidence it, or take it off The Brief.",
+      items: uncovered.map((criterion) => ({
+        label: criterion.text,
+        detail: `Criterion ${criterion.position} of ${criteria.length}`,
+      })),
+      invariant: 1,
+    };
+  }
+
+  return null;
 }
 
-/** Invariant 1 — rubric before pipeline. A Search cannot attach to a role that is not open. */
+/** Invariant 1 — a Search cannot attach to a role that is not open. */
 export function refuseSearch(state: PrototypeState, roleId: RoleId): Refusal | null {
   const role = state.roles.find((candidate) => candidate.id === roleId);
   if (!role || role.state === "open") return null;
@@ -58,24 +127,9 @@ export function refuseSearch(state: PrototypeState, roleId: RoleId): Refusal | n
     };
   }
 
-  const version = state.briefVersions.find(
-    (candidate) =>
-      candidate.brief_id === role.brief_id &&
-      candidate.version ===
-        Math.max(
-          ...state.briefVersions
-            .filter((other) => other.brief_id === role.brief_id)
-            .map((other) => other.version),
-        ),
-  );
-  const held = version ? criteriaFor(state, version.id).length : 0;
-
-  return {
-    requirement: "This role can't run a search until The Brief defines three criteria.",
-    reason: held === 1 ? "The Brief has one." : `The Brief has ${held}.`,
-    action: `Add ${MINIMUM_CRITERIA - held === 1 ? "a third criterion" : `${MINIMUM_CRITERIA - held} more criteria`} to The Brief, then open the role.`,
-    invariant: 1,
-  };
+  const blocked = refuseOpen(state, roleId);
+  if (!blocked) return null;
+  return { ...blocked, requirement: blocked.requirement.replace("open", "run a search") };
 }
 
 /** Invariant 1 — the same trigger sits on Candidacy insert. */
@@ -92,23 +146,32 @@ export function refuseCandidacy(state: PrototypeState, roleId: RoleId): Refusal 
     };
   }
 
-  const version = state.briefVersions.find((candidate) => candidate.brief_id === role.brief_id);
-  const held = version ? criteriaFor(state, version.id).length : 0;
-
+  const blocked = refuseOpen(state, roleId);
+  if (!blocked) return null;
   return {
-    requirement: "This role can't receive candidates until The Brief defines three criteria.",
-    reason: `The Brief has ${held}.`,
-    action: "Add the third criterion, then open the role.",
-    invariant: 1,
+    ...blocked,
+    requirement: blocked.requirement.replace("open", "receive candidates"),
   };
 }
 
-/** Invariant 3 — no advancement without a scorecard, naming the criteria with no entry. */
+/** Invariant 1 — the gate on the transition itself, for the live "Open this role" control. */
+export function refuseOpenRole(state: PrototypeState, roleId: RoleId): Refusal | null {
+  return refuseOpen(state, roleId);
+}
+
+/* ── Invariant 3 · no advancement without a scorecard ────────────────────────────
+ * Scoped to the stage being left, not to the whole rubric. The Brief says which
+ * criteria each stage is responsible for; a stage that carries none gates nothing,
+ * because the work it does — interest, availability, money — is real and is not in
+ * the rubric.
+ *
+ * The whole rubric is still required, at Submitted. See refuseSubmission.
+ * ─────────────────────────────────────────────────────────────────────────────── */
 export function refuseAdvance(state: PrototypeState, candidacyId: CandidacyId): Refusal | null {
-  const candidacy = state.candidacies.find((item) => item.id === candidacyId);
+  const candidacy = candidacyById(state, candidacyId);
   if (!candidacy) return null;
 
-  const stage = state.stages.find((item) => item.id === candidacy.stage_id);
+  const stage = stageOf(state, candidacy);
   if (stage?.terminal) {
     return {
       requirement: "A closed candidacy does not move.",
@@ -117,31 +180,45 @@ export function refuseAdvance(state: PrototypeState, candidacyId: CandidacyId): 
       invariant: 3,
     };
   }
+  if (!stage) return null;
 
-  const review = state.reviews.find((item) => item.candidacy_id === candidacyId);
-  const recorded = review
-    ? state.findings.filter((finding) => finding.review_id === review.id)
-    : [];
+  const onward = nextStage(state, candidacy);
+  if (!onward) return null;
 
-  const missing = criteriaFor(state, candidacy.brief_version_id).filter(
+  const recorded = findingsFor(state, candidacy.id);
+  const owed = criteriaAtStage(state, candidacy, stage.id).filter(
     (criterion) => !recorded.some((finding) => finding.criterion_id === criterion.id),
   );
 
-  if (missing.length === 0) return null;
+  if (owed.length > 0) {
+    const total = criteriaFor(state, candidacy.brief_version_id).length;
+    return {
+      requirement: `This candidate can't leave ${stage.label} until its scorecard is complete.`,
+      reason:
+        owed.length === 1
+          ? `One criterion this stage carries has no entry.`
+          : `${owed.length} criteria this stage carries have no entry.`,
+      action: "Open the scorecard and record a finding against each.",
+      items: owed.map((criterion) => ({
+        label: criterion.text,
+        detail: `Criterion ${criterion.position} of ${total} · assigned to ${stage.label}`,
+      })),
+      invariant: 3,
+    };
+  }
 
-  return {
-    requirement: "This candidate can't advance until the scorecard is complete.",
-    reason:
-      missing.length === 1
-        ? "One criterion has no entry."
-        : `${missing.length} criteria have no entry.`,
-    action: "Open the scorecard and record a finding against each.",
-    items: missing.map((criterion) => ({
-      label: criterion.text,
-      detail: `Criterion ${criterion.position} of ${criteriaFor(state, candidacy.brief_version_id).length}`,
-    })),
-    invariant: 3,
-  };
+  /* Invariant 6, at the point it bites. Moving somebody on without telling them is how
+   * a deadline becomes the only thing standing between a candidate and silence. */
+  if (!messageSentAtStage(state, candidacy.id, stage.id)) {
+    return {
+      requirement: `This candidate can't leave ${stage.label} without having been told they reached it.`,
+      reason: "No message has been sent at this stage.",
+      action: "Send the message for this stage, then advance.",
+      invariant: 6,
+    };
+  }
+
+  return null;
 }
 
 /** Invariant 4 — a rejection carries a reason code and written text. Both, always. */
@@ -190,6 +267,9 @@ export function refuseOverride(reasonText: string): Refusal | null {
 
 /** Invariant 5 — verification before submission, naming the signals that are open. */
 export function refuseSubmission(state: PrototypeState, candidacyId: CandidacyId): Refusal | null {
+  const candidacy = candidacyById(state, candidacyId);
+  if (!candidacy) return null;
+
   const open = state.crosscheckSignals.filter(
     (signal) => signal.candidacy_id === candidacyId && signal.resolution === null,
   );
@@ -205,12 +285,30 @@ export function refuseSubmission(state: PrototypeState, candidacyId: CandidacyId
     };
   }
 
-  const incomplete = refuseAdvance(state, candidacyId);
-  if (incomplete)
+  /* The whole rubric, here and only here. The agency's assessment ends at submission,
+   * so this is the last point at which a criterion with no entry can be caught — and
+   * the record that goes to the client has a line for every one of them. */
+  const recorded = findingsFor(state, candidacy.id);
+  const criteria = criteriaFor(state, candidacy.brief_version_id);
+  const owed = criteria.filter(
+    (criterion) => !recorded.some((finding) => finding.criterion_id === criterion.id),
+  );
+
+  if (owed.length > 0) {
     return {
-      ...incomplete,
-      requirement: incomplete.requirement.replace("advance", "be submitted"),
+      requirement: "A Submission Record carries a finding against every criterion.",
+      reason:
+        owed.length === 1
+          ? "One criterion has no entry."
+          : `${owed.length} criteria have no entry.`,
+      action: "Open the scorecard and record a finding against each, at whichever stage suits.",
+      items: owed.map((criterion) => ({
+        label: criterion.text,
+        detail: `Criterion ${criterion.position} of ${criteria.length}`,
+      })),
+      invariant: 5,
     };
+  }
 
   return null;
 }
@@ -236,6 +334,18 @@ export function refusePerson(sourceUrl: string, snapshot: string): Refusal | nul
     reason: "The snapshot is empty.",
     action: "Paste the sentence that names them. Without it the citation is a link that will rot.",
     invariant: 9,
+  };
+}
+
+/** A checkpoint records what happened. An empty note records nothing. */
+export function refuseCheckpoint(note: string): Refusal | null {
+  if (note.trim().length > 0) return null;
+  return {
+    requirement: "A checkpoint records what happened, in words.",
+    reason: "The note is empty.",
+    action:
+      "Write what the manager said and what the person said. A checkpoint nobody wrote is a checkpoint nobody did.",
+    invariant: 6,
   };
 }
 

@@ -325,7 +325,7 @@ export const sightings: Sighting[] = [
     source_kind: "Company team page",
     retrieved_at: "2025-09-15T14:20:00.000Z",
     snapshot_excerpt:
-      "George Amankwah, Senior Management Accountant. George business-partners the milling and packing operations and builds the weekly rolling forecast.",
+      "George Amankwah, Senior Management Accountant. George business-partners the milling and packing operations and builds the weekly rolling forecast for the site. He is a CIMA finalist.",
     resolving: true,
   },
   {

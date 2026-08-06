@@ -6,7 +6,7 @@
  *   closed · one line in a list, so the list is not uniform
  */
 import { ORG_ID, recruiter } from "./organisation";
-import type { Brief, BriefVersion, Criterion, Role, SourcingScope } from "./types";
+import type { Brief, BriefStage, BriefVersion, Criterion, Role, SourcingScope } from "./types";
 
 export const OPEN_ROLE_ID = "rol_financial_controller";
 export const DRAFT_ROLE_ID = "rol_management_accountant";
@@ -104,7 +104,9 @@ export const criteria: Criterion[] = [
     cell_label: "Qualified accountant",
   },
 
-  // Two. One short of the three that invariant 1 requires to open the role.
+  /* Two. One short of the three that invariant 1 requires to open the role — and
+   * neither is assigned to a stage, so once the third arrives the coverage refusal
+   * fires behind it. Two refusals in sequence, both reachable from a cold start. */
   {
     id: "crt_ma_1",
     brief_version_id: DRAFT_BRIEF_VERSION_ID,
@@ -237,5 +239,188 @@ export const sourcingScopes: SourcingScope[] = [
       "Bramhall Precision Group and its subsidiaries",
       "Calderstone Partners portfolio companies (client instruction, 2 March)",
     ],
+  },
+];
+
+/* The third criterion Joseph is coming back with. Not in `criteria` above, because it
+ * does not exist on the Brief yet — the draft role's screen has a live control that
+ * adds it, which is how the count refusal and the coverage refusal are reachable one
+ * after the other without editing a fixture. */
+export const PENDING_DRAFT_CRITERION: Criterion = {
+  id: "crt_ma_3",
+  brief_version_id: DRAFT_BRIEF_VERSION_ID,
+  position: 3,
+  text: "Has run a stock count and reconciled the variance",
+  cell_label: "Stock count",
+};
+
+/* ── The Brief also says where each criterion is evidenced ───────────────────────
+ *
+ * Defined before anybody is sourced, which is the whole point: a stage that acquires
+ * its purpose retrospectively is a conversation, not an assessment. Each stage names
+ * the criteria it is responsible for, and the union of those has to cover the rubric
+ * before the role can open.
+ *
+ * Two stages carry no criteria and that is deliberate. Contacted tests whether the
+ * person is interested, available and in range on money — real work, none of it in
+ * the rubric. Client interview belongs to the client, and the agency does not record
+ * findings on someone else's conversation.
+ *
+ * The agency's assessment therefore ends at Submitted, which is why every criterion
+ * has to be assigned at or before it. That is the same requirement invariant 5 already
+ * imposes on the Submission Record, arrived at from the other end.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+export const briefStages: BriefStage[] = [
+  {
+    id: "stg_fc_sourced",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 1,
+    label: "Sourced",
+    purpose:
+      "What the public record already shows. Sector and qualification, before anyone is contacted.",
+    owner: "recruiter",
+    criterion_ids: ["crt_fc_4", "crt_fc_5"],
+    candidate_message:
+      "I came across your profile while working on a Financial Controller role for a manufacturing business in South Yorkshire. I have not shared your details with anyone. If you would like to hear about it, reply and I will call you; if not, tell me and I will close the record.",
+  },
+  {
+    id: "stg_fc_contacted",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 2,
+    label: "Contacted",
+    purpose:
+      "Interest, availability, notice period and salary. None of it is in the rubric, and all of it decides whether the rest is worth anyone's time.",
+    owner: "recruiter",
+    criterion_ids: [],
+    candidate_message:
+      "Thanks for coming back to me. Before we go further: the role is Financial Controller at a PE-backed manufacturer near Rotherham, and the assessment is against five written criteria agreed with the client. I will send those to you before the screening call so you know what I am asking about.",
+  },
+  {
+    id: "stg_fc_screening",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 3,
+    label: "Screening call",
+    purpose: "Thirty minutes. The two things a CV implies and only a conversation confirms.",
+    owner: "recruiter",
+    criterion_ids: ["crt_fc_1", "crt_fc_3"],
+    candidate_message:
+      "The screening call is thirty minutes. I will ask you about closing a month-end under a private-equity reporting calendar, and about the team you manage. Bring an example of each; I will be quoting what you tell me into the record the client sees.",
+  },
+  {
+    id: "stg_fc_competency",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 4,
+    label: "Competency call",
+    purpose:
+      "One criterion, properly. Led an ERP migration is the one every CV claims and few can evidence.",
+    owner: "recruiter",
+    criterion_ids: ["crt_fc_2"],
+    candidate_message:
+      "This call is about one thing: a system implementation you led. I will ask what you owned, what went wrong, and what you would do differently. If you sat on a steering group rather than running it, say so — it is recorded either way, and the client is told which.",
+  },
+  {
+    id: "stg_fc_submitted",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 5,
+    label: "Submitted",
+    purpose:
+      "The record goes to the client. Every criterion carries a finding by here, or it does not go.",
+    owner: "recruiter",
+    criterion_ids: [],
+    candidate_message:
+      "Your record has gone to the client today. You can read exactly what was written and the passages it was drawn from at the link below. Nothing was sent that you cannot see.",
+  },
+  {
+    id: "stg_fc_client",
+    brief_version_id: OPEN_BRIEF_VERSION_ID,
+    position: 6,
+    label: "Client interview",
+    purpose: "The client's conversation. The agency records no findings on it.",
+    owner: "client",
+    criterion_ids: [],
+    candidate_message:
+      "The client would like to meet you. I will send times and the names of who you are seeing. I do not sit in on these and I do not score them.",
+  },
+
+  /* The draft role. Its stages are set out — that work was done on the call with
+   * Joseph — but the third criterion has not arrived yet, and when it does it will
+   * belong to no stage until somebody says where it is evidenced. Two refusals in
+   * sequence, both reachable from a cold start. */
+  {
+    id: "stg_ma_sourced",
+    brief_version_id: DRAFT_BRIEF_VERSION_ID,
+    position: 1,
+    label: "Sourced",
+    purpose: "Sector, from the public record.",
+    owner: "recruiter",
+    criterion_ids: ["crt_ma_2"],
+    candidate_message:
+      "I am working on a Management Accountant role for a food manufacturer near Wakefield and your background looks relevant. Reply if you would like to hear more.",
+  },
+  {
+    id: "stg_ma_screening",
+    brief_version_id: DRAFT_BRIEF_VERSION_ID,
+    position: 2,
+    label: "Screening call",
+    purpose: "Thirty minutes on the statutory accounts and the month-end.",
+    owner: "recruiter",
+    criterion_ids: ["crt_ma_1"],
+    candidate_message:
+      "Thirty minutes. I will ask you about a set of statutory accounts you prepared and took to audit. Bring the detail; I will be quoting what you tell me into the record the client sees.",
+  },
+  {
+    id: "stg_ma_submitted",
+    brief_version_id: DRAFT_BRIEF_VERSION_ID,
+    position: 3,
+    label: "Submitted",
+    purpose: "The record goes to the client.",
+    owner: "recruiter",
+    criterion_ids: [],
+    candidate_message:
+      "Your record has gone to the client today. You can read all of it at the link below.",
+  },
+
+  {
+    id: "stg_fbp_sourced",
+    brief_version_id: CLOSED_BRIEF_VERSION_ID,
+    position: 1,
+    label: "Sourced",
+    purpose: "Sector and qualification from the public record.",
+    owner: "recruiter",
+    criterion_ids: ["crt_fbp_3"],
+    candidate_message:
+      "I am working on a Finance Business Partner role for a food manufacturer near Wakefield and your background looks relevant. Reply if you would like to hear more.",
+  },
+  {
+    id: "stg_fbp_screening",
+    brief_version_id: CLOSED_BRIEF_VERSION_ID,
+    position: 2,
+    label: "Screening call",
+    purpose: "Business partnering and the forecast, with worked examples.",
+    owner: "recruiter",
+    criterion_ids: ["crt_fbp_1", "crt_fbp_2"],
+    candidate_message:
+      "Thirty minutes. I will ask you about a director you partnered and a forecast you built, and I will quote what you tell me into the record the client sees.",
+  },
+  {
+    id: "stg_fbp_submitted",
+    brief_version_id: CLOSED_BRIEF_VERSION_ID,
+    position: 3,
+    label: "Submitted",
+    purpose: "The record goes to the client.",
+    owner: "recruiter",
+    criterion_ids: [],
+    candidate_message:
+      "Your record has gone to the client today. You can read all of it at the link below.",
+  },
+  {
+    id: "stg_fbp_client",
+    brief_version_id: CLOSED_BRIEF_VERSION_ID,
+    position: 4,
+    label: "Client interview",
+    purpose: "The client's conversation.",
+    owner: "client",
+    criterion_ids: [],
+    candidate_message: "The client would like to meet you. Times to follow.",
   },
 ];

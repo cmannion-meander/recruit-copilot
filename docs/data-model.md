@@ -23,8 +23,10 @@ Every table except `Organization` carries `organization_id` and is under RLS.
 | `Client` | The hiring company | |
 | `Contact` | A person at a client | |
 | `Role` | A job the agency is working | `draft → open → closed` |
-| `Brief` / `BriefVersion` | The criteria set, versioned | Pinned onto every Search and Review |
+| `Brief` / `BriefVersion` | The criteria set **and the stages**, versioned together | Pinned onto every Search and Review |
 | `Criterion` | One requirement | Ordered; order fixed per role, drives the cell row |
+| `BriefStage` | One stage, and the criteria it evidences | Ordered. Every criterion assigned to one before the role opens |
+| `Channel` | Where a candidacy came from | Named by the agency. Counts by channel, never a rate |
 
 ### Sourcing — where candidates come from
 
@@ -41,7 +43,7 @@ Every table except `Organization` carries `organization_id` and is under RLS.
 | `Candidacy` | `Person` × `Role` | The central join. **The billable unit.** Created by sourcing, import, or inbound. Carries `auto_close_at`. |
 | `Stage` | Where a candidacy sits | |
 | `Document` | CV or attachment | Blob ref, SHA-256, parsed text with char offsets |
-| `Review` | One evaluation of a candidacy | Pins a `BriefVersion` |
+| `Review` | One scorecard, at one stage | Pins a `BriefVersion` and a `BriefStage`. Several per candidacy |
 | `Finding` | `Review` × `Criterion` | `evidenced` \| `not_found`. No score. |
 | `Evidence` | The quoted passage | Points at a `Document` **or** a `Sighting`. Append-only. |
 | `Exclusion` | Failed the bar, with a written reason | Stops resurfacing next quarter; answers "why not them?" |
@@ -53,7 +55,9 @@ Every table except `Organization` carries `organization_id` and is under RLS.
 | `CrosscheckSignal` | An integrity observation | Type, detail, artifact reference. Never a probability. |
 | `Override` | Dismissal of a signal | User, written reason, timestamp |
 | `Submission` / `SubmissionRecord` | The artifact sent to the client | Immutable snapshot, named sign-off, PDF |
-| `DecisionEvent` | Append-only audit log | Everything consequential writes here |
+| `CandidateMessage` | What the candidate was told, and when | Append-only. The candidate reads the same rows the recruiter does |
+| `Placement` / `PlacementCheckpoint` | After the start date | Day 7, 30, 60, 90. Agreed before the offer, not after |
+| `DecisionEvent` | Append-only audit log | Everything consequential writes here, with the stage it happened at |
 | `UsageEvent` | Tokens, cost, org, candidacy | Written on every call, whoever's key paid |
 
 ---
@@ -73,6 +77,13 @@ for a sourcing-led workflow, and honesty on the price page is part of the positi
 ## Open questions the build will force
 
 Real and unresolved. Do not paper over these in code — surface them.
+
+**RESOLVED — the Brief holds the rubric and the stages; the sourcing scope is separate.**
+See ADR 0011 and `docs/prototype-findings.md` §1. Kept below because the reasoning is what
+matters, and the same question will be asked again about the next thing that wants to live on
+The Brief. The test that settled it: does changing this change what anyone is assessed against?
+Moving a criterion to a later stage does, so it lives on The Brief and repins. Widening where
+you look does not, so it does not.
 
 **Does one Brief hold both the sourcing scope and the assessment rubric?** They are different
 things. The sourcing scope is where to look — companies, ecosystems, adjacent markets — and it
@@ -101,6 +112,16 @@ being the argument. Meter candidacies anyway — it is still the axis that grows
 delivered, and it is still the axis the incumbents get wrong by charging on headcount. But the
 justification changes from cost recovery to value alignment, and the price page copy has to
 change with it. Resolve before writing billing code.
+
+---
+
+**What is measured about the process, and what is never measured about a person.** Counts of
+who reached which stage, by channel; time to fill; cost per placement. All of those judge the
+desk and all of them are fair game. Quality of hire is not: it is a score attached to a named
+individual, applied after the fact, and it is the object invariant 2 refuses at the front of
+the process wearing a different hat. A placement checkpoint records what happened, in words, on
+a date — and the only part of it that changes anything is the sentence saying what the next
+Brief for that client should ask for differently.
 
 ---
 

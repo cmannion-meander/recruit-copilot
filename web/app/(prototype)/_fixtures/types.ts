@@ -41,6 +41,10 @@ export type DecisionId = string;
 export type ExclusionId = string;
 export type DecisionEventId = string;
 export type SubmissionRecordId = string;
+export type ChannelId = string;
+export type CandidateMessageId = string;
+export type PlacementId = string;
+export type CheckpointId = string;
 
 /** ISO 8601. Every date in the fixtures is a literal string measured against NOW in
  *  ./clock.ts, never against the real clock — see the note there. */
@@ -111,6 +115,43 @@ export type BriefVersion = {
   note: string;
   /** The assessment rubric. Ordered, and the order is fixed for the life of the version. */
   criterion_ids: CriterionId[];
+};
+
+/* ── The Brief also says WHERE each criterion is evidenced ───────────────────────
+ * A structured process defines its stages before anyone is sourced, and each stage
+ * is responsible for a named subset of the rubric. Without that, "no advancement
+ * without a scorecard" can only mean "every criterion, at every transition", which
+ * makes the first transition impossible — you contact someone in order to learn the
+ * things. See ADR 0011.
+ *
+ * These live inside the BriefVersion and are versioned with it. Moving a criterion
+ * from the screening call to the competency call changes what the assessment is, so
+ * it earns a new version and everything repins. That is the opposite of SourcingScope,
+ * which is separate precisely because widening where you look changes nothing about
+ * what anyone is assessed against.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+export type StageOwner = "recruiter" | "client";
+
+export type BriefStage = {
+  id: StageId;
+  brief_version_id: BriefVersionId;
+  /** 1-based along the pipeline. */
+  position: number;
+  label: string;
+  /** What this stage is for, in one line. Not every stage evidences a criterion. */
+  purpose: string;
+  owner: StageOwner;
+  /* The criteria this stage is responsible for evidencing. May be empty — an early
+   * stage that tests interest and availability gates nothing in the rubric, and
+   * pretending otherwise is how a process acquires ceremony.
+   *
+   * A criterion may appear at two stages. That is the deliberate case the structured
+   * process calls for: thin at the screening call, revisited properly at the
+   * competency call, both readings on the record with their dates. */
+  criterion_ids: CriterionId[];
+  /* What the candidate is told on arriving here. Non-nullable: a stage with nothing
+   * to say to the candidate is a stage where somebody goes quiet. */
+  candidate_message: string;
 };
 
 export type Criterion = {
@@ -210,7 +251,18 @@ export type Stage = {
   terminal: boolean;
 };
 
-export type CandidacyOrigin = "search" | "inbound" | "import";
+/* Where candidacies come from, named rather than enumerated, because a four-person
+ * agency's channels are its own and "search | inbound | import" cannot tell you that
+ * the trade-press reads convert and the network introductions do not. */
+export type ChannelKind = "outbound" | "inbound" | "referral" | "network";
+
+export type Channel = {
+  id: ChannelId;
+  organization_id: OrganizationId;
+  name: string;
+  kind: ChannelKind;
+  note: string;
+};
 
 export type Candidacy = {
   id: CandidacyId;
@@ -220,7 +272,7 @@ export type Candidacy = {
   /** Pinned at creation. The candidacy is assessed against this, not against latest. */
   brief_version_id: BriefVersionId;
   stage_id: StageId;
-  origin: CandidacyOrigin;
+  channel_id: ChannelId;
   created_at: Timestamp;
   /* NOT NULL, defaulted on insert, and there is no control anywhere in this prototype
    * to extend or disable it — invariant 6. A deadline you can quietly turn off is not
@@ -255,12 +307,18 @@ export type Document = {
   properties: { author: string | null; producer: string | null; created: Timestamp | null };
 };
 
+/* One evaluation, at one stage. A candidacy accumulates several — the sourcing read,
+ * the screening call, the competency call — and each is responsible only for the
+ * criteria its stage carries. The scorecard-per-interview is the structured process's
+ * unit, and it is also the only shape in which invariant 3 is enforceable. */
 export type Review = {
   id: ReviewId;
   organization_id: OrganizationId;
   candidacy_id: CandidacyId;
   /** Pinned, like Search. Every record must render as it was when it was made. */
   brief_version_id: BriefVersionId;
+  /** The stage this scorecard belongs to. */
+  stage_id: StageId;
   created_at: Timestamp;
   created_by: UserId;
 };
@@ -401,7 +459,9 @@ export type DecisionEventType =
   | "signal_overridden"
   | "rejected"
   | "excluded"
-  | "submission_created";
+  | "submission_created"
+  | "message_sent"
+  | "checkpoint_recorded";
 
 /** Append-only. Nothing in the reducer removes or rewrites one. */
 export type DecisionEvent = {
@@ -412,6 +472,10 @@ export type DecisionEvent = {
   actor: UserId;
   at: Timestamp;
   summary: string;
+  /* The stage the candidacy was in after this event. Set on creation and on every
+   * transition, so "how far did this one get" is answerable from the log rather than
+   * from a denormalised column that can disagree with it. */
+  stage_id: StageId | null;
 };
 
 /** The snapshot taken at send time: the pinned Brief version and every quoted passage,
@@ -444,4 +508,64 @@ export type SubmissionRecord = {
     /** Candidate-facing token for the view at /prototype/candidate/[token]. */
     candidate_token: string;
   };
+};
+
+// ── Communication ───────────────────────────────────────────────────────────────
+
+/* What the candidate has been told, and when. Append-only, and the candidate reads
+ * the same rows the recruiter does — there is no internal version of a message.
+ *
+ * Invariant 6 says ghosting is impossible. A deadline alone does not deliver that; a
+ * person who hears nothing for six weeks and then receives an automated closure has
+ * still been ghosted, politely. The stage messages are what make the deadline a
+ * promise rather than a backstop. */
+export type CandidateMessageKind = "stage" | "rejection" | "auto_closure" | "submission";
+
+export type CandidateMessage = {
+  id: CandidateMessageId;
+  organization_id: OrganizationId;
+  candidacy_id: CandidacyId;
+  kind: CandidateMessageKind;
+  /** The stage the message was sent on arriving at, where there is one. */
+  stage_id: StageId | null;
+  sent_at: Timestamp;
+  sent_by: UserId;
+  body: string;
+};
+
+// ── After the placement ─────────────────────────────────────────────────────────
+
+/* The step everyone forgets. For a permanent-placement agency the fee is not earned
+ * on the start date, it is earned on the person still being there at the end of
+ * probation — so the checkpoints are the agency's own interest, not a courtesy.
+ *
+ * There is no quality-of-hire figure here and there will not be one. It is a score
+ * attached to a named individual, applied retrospectively, and it is the same object
+ * invariant 2 refuses at the front of the process wearing a different hat. A
+ * checkpoint records what happened, in words, on a date. */
+export type Placement = {
+  id: PlacementId;
+  organization_id: OrganizationId;
+  candidacy_id: CandidacyId;
+  /** Pinned: the version of The Brief this person was hired against. */
+  brief_version_id: BriefVersionId;
+  started_on: Timestamp;
+  probation_ends_on: Timestamp;
+};
+
+export type PlacementCheckpoint = {
+  id: CheckpointId;
+  placement_id: PlacementId;
+  /** 7, 30, 60, 90. The plan the transcript asks for, in place before the offer. */
+  day: number;
+  due_on: Timestamp;
+  recorded_at: Timestamp | null;
+  recorded_by: UserId | null;
+  /** What happened. Not a rating. */
+  note: string | null;
+  /* What the next Brief for this client should say differently. This is the loop:
+   * an outcome at day 30 becomes a criterion at the next kick-off, so the process
+   * learns instead of repeating. Surfaced on the Brief screen of every later role
+   * for the same client. */
+  brief_feedback: string | null;
 };

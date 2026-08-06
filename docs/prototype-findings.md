@@ -8,6 +8,14 @@ invented.
 
 ---
 
+> **Second pass, mapped against a five-step structured hiring framework** — ideal candidate
+> profile, staged interview process with a scorecard per stage, channel measurement, candidate
+> communication, and post-hire feedback. Findings 15
+> to 19 are new and come from that mapping; ADR 0011 records what changed. Finding 2 and finding
+> 8 below were both sharpened by it, and finding 8's answer got worse before it got better.
+
+---
+
 ## 1 · The Brief does not hold the sourcing scope. Two objects.
 
 **The question** (`docs/data-model.md`): does one Brief hold both the sourcing scope and the
@@ -338,6 +346,107 @@ makes it automatic is the thing to be suspicious of.
 
 ---
 
+## 15 · Invariant 3 could not be obeyed, and the framework is what showed it
+
+"A candidate cannot move to a later stage while any criterion in the pinned Brief version has no
+Finding." The prototype enforced that faithfully, and the result was a screen that refused every
+first transition: Priya Nandakumar cannot leave Sourced, because five findings cannot exist
+before anybody has spoken to her.
+
+Nine screens were built against that rule without noticing, because every candidacy in the
+fixtures that mattered was already deep in the pipeline. It took a document describing what a
+*stage* is for to make the hole visible.
+
+The fix is the framework's own structure — each stage responsible for a named subset of the
+rubric — and it is now invariant 3, with the whole rubric required once at submission. ADR 0011
+says plainly that this is a change to the contract rather than a clarification.
+
+**The lesson is about fixtures, not about the rule.** Everything in the fixture set was arranged
+to make refusals reachable. Nothing in it was arranged to make the *ordinary path* reachable,
+and the ordinary path is where the unimplementable rule was hiding.
+
+---
+
+## 16 · Two stages carry no criteria, and that is the honest answer
+
+Contacted tests interest, availability, notice period and money. Client interview belongs to the
+client. Neither evidences anything on the rubric, so neither gates anything.
+
+The temptation was to give every stage a criterion so the process looks rigorous. That is how a
+structured process turns into ceremony: a stage invents an assessment to justify existing, and
+the assessment is the one nobody can cite. Empty is a legitimate value and the screen says so in
+words — *"Contacted carries no criteria. It tests interest, availability and money, and none of
+those is on the rubric — so it gates nothing."*
+
+---
+
+## 17 · A deadline is not a promise unless somebody is told
+
+Invariant 6 said ghosting is impossible and delivered an auto-closure. Building the message
+history showed what that actually buys: Bethan Lloyd-Price has one message, sent five months
+ago, and closes in three days. She will receive an automated closure and nothing else. That is
+ghosting with a receipt.
+
+So a candidacy cannot leave a stage until the candidate has been told they reached it, and
+`BriefStage.candidate_message` is non-nullable. Frances Ibbotson sits in the fixtures assessed at
+the competency call and never told, so the refusal is reachable from a cold start.
+
+**This is the most arguable thing in the second pass** and it is deliberately cheap to remove:
+eight lines in `_state/refusals.ts`. It costs the recruiter something on every transition, and
+whether that cost is worth it is a question for a design partner rather than for me.
+
+A smaller decision inside it: the rejection text the recruiter writes is sent verbatim. There is
+no internal version and no softer second text. One text and one audience is the only arrangement
+in which writing it honestly is the easy path.
+
+---
+
+## 18 · Process figures are allowed; the same figure about a person is not
+
+The framework wants pass-through rates, cost per hire, time to hire and quality of hire. Three
+of those four are fine and one is invariant 2 in a hat.
+
+The line that holds: **a figure that judges the desk is allowed; a figure that judges a person
+is not.** How many reached the screening call, by channel, is a question about the agency's own
+effort. Quality of hire is a score attached to a named individual, applied retrospectively, and
+if it existed it would be sorted on within a month.
+
+Two consequences fell out of drawing it:
+
+**No percentages, anywhere.** The funnel reads "6 of 10 reached" rather than "60%". A rate on
+n=10 is false precision, a four-person agency never has a larger n, and a percentage is the
+shape a judgement arrives in — it is on the do-not list for candidate figures and it does not
+become a different shape when the subject changes.
+
+**The one thing I am least sure of** is the bar beside each funnel count. It is drawn from the
+count, not from an evaluation of anybody, so it does not breach the rule as written. It is still
+a shape that invites glancing instead of reading, and this product's whole discipline is that
+you read the words. Kept, and flagged here rather than buried.
+
+---
+
+## 19 · The loop closes on the Brief, or it closes nowhere
+
+The transcript's fifth step is the one it says everybody forgets. Building it showed why: a
+post-placement review has nowhere to go. Feedback recorded against a person is a performance
+note the agency has no business keeping. Feedback recorded against the placement is a file
+nobody opens again.
+
+The only version that changes anything is feedback recorded against **the Brief that produced
+the hire**, surfaced on the Brief of the next role at the same client.
+
+George Amankwah's day-30 checkpoint reads: criterion 2 said "Built a rolling forecast from
+site-level data" and he evidenced it honestly — the sighting said he builds the weekly forecast,
+and he does. What Calder Vale actually needed was somebody who owns the model. The criterion was
+not wrong; the wording was. That sentence now sits at the top of the Brief for the next Calder
+Vale role, above the criteria, while they are still being written.
+
+**It also gave the checkpoints somewhere to be seen.** For a perm agency the fee is earned at
+the end of probation, not on the start date, so an unrecorded day-90 checkpoint is money at
+risk. It is on the desk, and it says "66 days ago, and nobody has asked".
+
+---
+
 ## Carried into the slices
 
 | # | Finding | Where it lands |
@@ -350,3 +459,8 @@ makes it automatic is the thing to be suspicious of.
 | 7 | `not_found` with optional evidence | Test in slice 7 |
 | 9 | Sentence segmentation is a parsing requirement | Slice 6 budget |
 | 11 | Validators raise with names, not counts | Slice 5 and 9 validators |
+| 15 | Invariant 3 is per-stage; the whole rubric at submission | ADR 0011 · slice 2 and slice 5 |
+| 16 | A stage may carry no criteria | Slice 2 schema |
+| 17 | A stage cannot be left until the candidate was told | Reversible; decide with a design partner |
+| 18 | Counts, never rates. No quality of hire. | Slice 11 metering, and the do-not list |
+| 19 | Placement feedback attaches to the BriefVersion | Slice 2 schema, so it is never retrofitted |

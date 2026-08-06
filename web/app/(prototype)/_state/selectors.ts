@@ -1,11 +1,16 @@
 /* Reads over the fixture state. Pure, and none of them sorts by anything that could be
- * read as quality: roles sort by title, candidacies by the person's family name, events
- * by time. There is no "best first" anywhere, because there is nothing to sort on.
+ * read as quality: roles sort by client, candidacies by the person's family name,
+ * events by time. There is no "best first" anywhere, because there is nothing to sort on.
+ *
+ * Nothing here returns a percentage. Funnel figures are counts and count pairs — "6 of
+ * 10 reached the screening call" — because a rate on n=10 is false precision, and
+ * because a percentage is the shape a judgement arrives in.
  */
 
 import type { PrototypeState } from "../_fixtures";
 import { formatDateShort } from "../_fixtures/clock";
 import type {
+  BriefStage,
   Candidacy,
   CandidacyId,
   Criterion,
@@ -18,6 +23,7 @@ import type {
   Role,
   RoleId,
   Sighting,
+  Stage,
 } from "../_fixtures/types";
 
 export function roleById(state: PrototypeState, id: RoleId) {
@@ -31,9 +37,6 @@ export function candidacyById(state: PrototypeState, id: CandidacyId) {
 }
 export function clientById(state: PrototypeState, id: string) {
   return state.clients.find((client) => client.id === id);
-}
-export function stageById(state: PrototypeState, id: string) {
-  return state.stages.find((stage) => stage.id === id);
 }
 export function userById(state: PrototypeState, id: string) {
   return state.users.find((user) => user.id === id);
@@ -52,6 +55,9 @@ export function searchById(state: PrototypeState, id: string) {
 }
 export function sourcingScopeById(state: PrototypeState, id: string) {
   return state.sourcingScopes.find((scope) => scope.id === id);
+}
+export function channelById(state: PrototypeState, id: string) {
+  return state.channels.find((channel) => channel.id === id);
 }
 
 /** The latest version of a role's Brief, whether or not the role has opened. */
@@ -76,14 +82,105 @@ export function criteriaFor(state: PrototypeState, briefVersionId: string): Crit
     .sort((left, right) => left.position - right.position);
 }
 
-export function reviewFor(state: PrototypeState, candidacyId: CandidacyId) {
-  return state.reviews.find((review) => review.candidacy_id === candidacyId);
+// ── The stages The Brief defines ────────────────────────────────────────────────
+
+export function stagesFor(state: PrototypeState, briefVersionId: string): BriefStage[] {
+  return state.briefStages
+    .filter((stage) => stage.brief_version_id === briefVersionId)
+    .sort((left, right) => left.position - right.position);
+}
+
+/** A pipeline stage or a terminal outcome, normalised so callers need not care which. */
+export type ResolvedStage = {
+  id: string;
+  label: string;
+  position: number | null;
+  terminal: boolean;
+  purpose: string;
+  criterion_ids: string[];
+  owner: "recruiter" | "client" | null;
+  candidate_message: string | null;
+};
+
+function fromTerminal(stage: Stage): ResolvedStage {
+  return {
+    id: stage.id,
+    label: stage.label,
+    position: null,
+    terminal: true,
+    purpose: "",
+    criterion_ids: [],
+    owner: null,
+    candidate_message: null,
+  };
+}
+
+function fromBrief(stage: BriefStage): ResolvedStage {
+  return {
+    id: stage.id,
+    label: stage.label,
+    position: stage.position,
+    terminal: false,
+    purpose: stage.purpose,
+    criterion_ids: stage.criterion_ids,
+    owner: stage.owner,
+    candidate_message: stage.candidate_message,
+  };
+}
+
+export function stageById(state: PrototypeState, id: string): ResolvedStage | undefined {
+  const brief = state.briefStages.find((stage) => stage.id === id);
+  if (brief) return fromBrief(brief);
+  const terminal = state.terminalStages.find((stage) => stage.id === id);
+  return terminal ? fromTerminal(terminal) : undefined;
+}
+
+export function stageOf(state: PrototypeState, candidacy: Candidacy) {
+  return stageById(state, candidacy.stage_id);
+}
+
+/** The next stage along the pipeline of this candidacy's pinned Brief. */
+export function nextStage(state: PrototypeState, candidacy: Candidacy) {
+  const current = stageOf(state, candidacy);
+  if (!current || current.position === null) return undefined;
+  const stages = stagesFor(state, candidacy.brief_version_id);
+  const found = stages.find((stage) => stage.position === (current.position ?? 0) + 1);
+  return found ? fromBrief(found) : undefined;
+}
+
+/* Which criteria this stage is responsible for, in the order of The Brief. Empty is a
+ * legitimate answer: an early stage tests interest and money, and neither is a criterion. */
+export function criteriaAtStage(
+  state: PrototypeState,
+  candidacy: Candidacy,
+  stageId: string,
+): Criterion[] {
+  const stage = stageById(state, stageId);
+  if (!stage) return [];
+  return criteriaFor(state, candidacy.brief_version_id).filter((criterion) =>
+    stage.criterion_ids.includes(criterion.id),
+  );
+}
+
+// ── Scorecards ──────────────────────────────────────────────────────────────────
+
+export function reviewsFor(state: PrototypeState, candidacyId: CandidacyId) {
+  return state.reviews
+    .filter((review) => review.candidacy_id === candidacyId)
+    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at));
+}
+
+export function reviewAtStage(state: PrototypeState, candidacyId: CandidacyId, stageId: string) {
+  return state.reviews.find(
+    (review) => review.candidacy_id === candidacyId && review.stage_id === stageId,
+  );
 }
 
 export function findingsFor(state: PrototypeState, candidacyId: CandidacyId): Finding[] {
-  const review = reviewFor(state, candidacyId);
-  if (!review) return [];
-  return state.findings.filter((finding) => finding.review_id === review.id);
+  const ids = new Set(reviewsFor(state, candidacyId).map((review) => review.id));
+  return state.findings
+    .filter((finding) => ids.has(finding.review_id))
+    .sort((left, right) => Date.parse(left.recorded_at) - Date.parse(right.recorded_at));
 }
 
 export function evidenceFor(state: PrototypeState, findingId: string): Evidence | undefined {
@@ -96,8 +193,9 @@ export function evidenceFor(state: PrototypeState, findingId: string): Evidence 
  * not a finding with a third value; it is the absence of one, and the row has to say
  * so or the scorecard reads as complete when it is not.
  *
- * Written up in docs/prototype-findings.md: this is the first thing the interface
- * forced that the schema does not carry.
+ * Where a criterion has been read twice — thin at the screening call, properly at the
+ * competency call — the row shows the most recent reading and `earlier` carries the
+ * ones before it. Nothing is overwritten; both are on the record with their dates.
  * ─────────────────────────────────────────────────────────────────────────────── */
 export type CellState = "evidenced" | "not_found" | "no_entry";
 
@@ -106,36 +204,50 @@ export type Cell = {
   state: CellState;
   finding: Finding | undefined;
   evidence: Evidence | undefined;
+  /** The stage the current reading was recorded at. */
+  stage: ResolvedStage | undefined;
+  /** Earlier readings of the same criterion, oldest first. */
+  earlier: { finding: Finding; stage: ResolvedStage | undefined }[];
 };
 
 export function cellsFor(state: PrototypeState, candidacy: Candidacy): Cell[] {
   const findings = findingsFor(state, candidacy.id);
+  const reviews = reviewsFor(state, candidacy.id);
+  const stageOfReview = (reviewId: string) => {
+    const review = reviews.find((item) => item.id === reviewId);
+    return review ? stageById(state, review.stage_id) : undefined;
+  };
+
   return criteriaFor(state, candidacy.brief_version_id).map((criterion) => {
-    const finding = findings.find((item) => item.criterion_id === criterion.id);
+    const all = findings.filter((finding) => finding.criterion_id === criterion.id);
+    const finding = all[all.length - 1];
     return {
       criterion,
       state: finding ? finding.status : "no_entry",
       finding,
       evidence: finding ? evidenceFor(state, finding.id) : undefined,
+      stage: finding ? stageOfReview(finding.review_id) : undefined,
+      earlier: all.slice(0, -1).map((item) => ({
+        finding: item,
+        stage: stageOfReview(item.review_id),
+      })),
     };
   });
 }
 
-export type CellCount = {
-  evidenced: number;
-  notFound: number;
-  noEntry: number;
-  total: number;
-};
-
-/** The count that sits beside the cells, and never renders without them — invariant 2. */
-export function countOf(cells: Cell[]): CellCount {
-  return {
-    evidenced: cells.filter((cell) => cell.state === "evidenced").length,
-    notFound: cells.filter((cell) => cell.state === "not_found").length,
-    noEntry: cells.filter((cell) => cell.state === "no_entry").length,
-    total: cells.length,
-  };
+/* Criteria whose most recent reading is not_found. A later stage is offered these for
+ * a second look, whether or not it carries them — a candidate who gave a thin example
+ * on a bad day should not be eliminated by one reading, and a second reading is a new
+ * finding beside the first rather than a correction of it. */
+export function carriedForward(state: PrototypeState, candidacy: Candidacy, stageId: string) {
+  const stage = stageById(state, stageId);
+  return cellsFor(state, candidacy).filter(
+    (cell) =>
+      cell.state === "not_found" &&
+      cell.stage !== undefined &&
+      cell.stage.id !== stageId &&
+      !(stage?.criterion_ids ?? []).includes(cell.criterion.id),
+  );
 }
 
 function familyName(person: Person | undefined) {
@@ -212,23 +324,129 @@ export function submissionByToken(state: PrototypeState, token: string) {
   return state.submissionRecords.find((record) => record.snapshot.candidate_token === token);
 }
 
-/** Counts by stage on a role. Counts, not a composite of them. */
-export function stageCountsForRole(state: PrototypeState, roleId: RoleId) {
-  const held = candidaciesForRole(state, roleId);
-  return state.stages
-    .map((stage) => ({
-      stage,
-      count: held.filter((candidacy) => candidacy.stage_id === stage.id).length,
-    }))
-    .filter((entry) => entry.count > 0);
+// ── Communication ───────────────────────────────────────────────────────────────
+
+export function messagesFor(state: PrototypeState, candidacyId: CandidacyId) {
+  return state.candidateMessages
+    .filter((message) => message.candidacy_id === candidacyId)
+    .sort((left, right) => Date.parse(left.sent_at) - Date.parse(right.sent_at));
 }
 
-/** The next stage along the pipeline, or undefined at the end of it. */
-export function nextStage(state: PrototypeState, stageId: string) {
-  const current = stageById(state, stageId);
-  if (!current || current.position === null) return undefined;
-  return state.stages.find((stage) => stage.position === (current.position ?? 0) + 1);
+export function lastMessageTo(state: PrototypeState, candidacyId: CandidacyId) {
+  const sent = messagesFor(state, candidacyId);
+  return sent[sent.length - 1];
 }
+
+/** Whether the candidate has been told they are at the stage they are at. */
+export function messageSentAtStage(
+  state: PrototypeState,
+  candidacyId: CandidacyId,
+  stageId: string,
+) {
+  return messagesFor(state, candidacyId).some((message) => message.stage_id === stageId);
+}
+
+// ── After the placement ─────────────────────────────────────────────────────────
+
+export function placementFor(state: PrototypeState, candidacyId: CandidacyId) {
+  return state.placements.find((placement) => placement.candidacy_id === candidacyId);
+}
+
+export function checkpointsFor(state: PrototypeState, placementId: string) {
+  return state.placementCheckpoints
+    .filter((checkpoint) => checkpoint.placement_id === placementId)
+    .sort((left, right) => left.day - right.day);
+}
+
+/** Feedback recorded at a placement for this client, newest first. The loop. */
+export function briefFeedbackForClient(state: PrototypeState, clientId: string) {
+  return state.placements
+    .flatMap((placement) => {
+      const candidacy = candidacyById(state, placement.candidacy_id);
+      const role = candidacy ? roleById(state, candidacy.role_id) : undefined;
+      if (!role || role.client_id !== clientId) return [];
+      const person = candidacy ? personById(state, candidacy.person_id) : undefined;
+      return checkpointsFor(state, placement.id)
+        .filter((checkpoint) => checkpoint.brief_feedback !== null)
+        .map((checkpoint) => ({
+          checkpoint,
+          placement,
+          role,
+          person_name: person?.full_name ?? "",
+        }));
+    })
+    .sort(
+      (left, right) => Date.parse(right.checkpoint.due_on) - Date.parse(left.checkpoint.due_on),
+    );
+}
+
+// ── The funnel ──────────────────────────────────────────────────────────────────
+
+/* How far a candidacy got, from the append-only log rather than a column that can
+ * disagree with it. A rejected candidate who reached the competency call counts as
+ * having reached it — which is the only reading that makes a funnel mean anything. */
+export function furthestPosition(state: PrototypeState, candidacy: Candidacy): number {
+  const stages = stagesFor(state, candidacy.brief_version_id);
+  const positionOf = (stageId: string | null) =>
+    stageId ? (stages.find((stage) => stage.id === stageId)?.position ?? 0) : 0;
+
+  const fromEvents = eventsFor(state, candidacy.id).map((event) => positionOf(event.stage_id));
+  return Math.max(positionOf(candidacy.stage_id), ...fromEvents, 0);
+}
+
+export type FunnelStep = {
+  stage: BriefStage;
+  /** How many candidacies reached this stage or beyond. A count, never a rate. */
+  reached: number;
+};
+
+export function funnelForRole(state: PrototypeState, role: Role): FunnelStep[] {
+  const version = workingBriefVersion(state, role);
+  if (!version) return [];
+  const held = candidaciesForRole(state, role.id);
+  return stagesFor(state, version.id).map((stage) => ({
+    stage,
+    reached: held.filter((candidacy) => furthestPosition(state, candidacy) >= stage.position)
+      .length,
+  }));
+}
+
+export type ChannelRow = {
+  channel: { id: string; name: string; note: string };
+  added: number;
+  reachedScreening: number;
+  reachedSubmitted: number;
+};
+
+/* By channel, as counts. What this answers is "which of the five things I do produces
+ * people who survive contact with the criteria" — a question about the agency's own
+ * effort, not about anybody's worth. */
+export function channelsForRole(state: PrototypeState, role: Role): ChannelRow[] {
+  const version = workingBriefVersion(state, role);
+  if (!version) return [];
+  const stages = stagesFor(state, version.id);
+  const screening = stages.find((stage) => stage.criterion_ids.length > 0 && stage.position > 1);
+  const submitted = stages.find((stage) => stage.label === "Submitted");
+  const held = candidaciesForRole(state, role.id);
+
+  return state.channels
+    .map((channel) => {
+      const mine = held.filter((candidacy) => candidacy.channel_id === channel.id);
+      return {
+        channel,
+        added: mine.length,
+        reachedScreening: screening
+          ? mine.filter((c) => furthestPosition(state, c) >= screening.position).length
+          : 0,
+        reachedSubmitted: submitted
+          ? mine.filter((c) => furthestPosition(state, c) >= submitted.position).length
+          : 0,
+      };
+    })
+    .filter((row) => row.added > 0);
+}
+
+// ── Provenance ──────────────────────────────────────────────────────────────────
 
 /* The provenance line, read from live state rather than from the fixture modules, so a
  * record made during the session cites correctly too. The fixtures have their own copy

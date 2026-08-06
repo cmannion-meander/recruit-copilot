@@ -6,19 +6,21 @@
  * database trigger, which is the only version that is actually true — see
  * docs/invariants.md on why a conviction enforced by intention is not enforced.
  *
- * Nothing here removes or rewrites a DecisionEvent, an Evidence row or a
- * SubmissionRecord. Invariant 8 revokes UPDATE and DELETE on all three at the
+ * Nothing here removes or rewrites a DecisionEvent, an Evidence row, a CandidateMessage
+ * or a SubmissionRecord. Invariant 8 revokes UPDATE and DELETE on those at the
  * permission level; here it is simply that no action exists.
  */
-
 import { initialState } from "../_fixtures";
 import { NOW } from "../_fixtures/clock";
 import { placeOf } from "../_fixtures/offsets";
 import { provenanceOfEvidence } from "../_fixtures/provenance";
-import type { Evidence, SubmissionSnapshotLine } from "../_fixtures/types";
+import { PENDING_DRAFT_CRITERION } from "../_fixtures/roles";
+import type { Evidence, Review, SubmissionSnapshotLine } from "../_fixtures/types";
 import {
   refuseAdvance,
   refuseCandidacy,
+  refuseCheckpoint,
+  refuseOpenRole,
   refuseOverride,
   refusePerson,
   refuseRejection,
@@ -29,12 +31,15 @@ import {
   cellsFor,
   clientById,
   criteriaFor,
+  latestBriefVersion,
   nextStage,
   personById,
-  reviewFor,
+  reviewAtStage,
   roleById,
   sightingById,
   stageById,
+  stageOf,
+  stagesFor,
 } from "./selectors";
 import type { Action, State } from "./types";
 
@@ -46,6 +51,67 @@ export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "reset":
       return initialPrototypeState;
+
+    // ── The Brief ─────────────────────────────────────────────────────────────
+
+    case "add_criterion": {
+      const role = roleById(state, action.role_id);
+      if (!role) return state;
+      const version = latestBriefVersion(state, role);
+      if (!version) return state;
+      if (state.criteria.some((criterion) => criterion.id === PENDING_DRAFT_CRITERION.id)) {
+        return state;
+      }
+      return {
+        ...state,
+        seq: state.seq + 1,
+        criteria: [...state.criteria, PENDING_DRAFT_CRITERION],
+        briefVersions: state.briefVersions.map((item) =>
+          item.id === version.id
+            ? { ...item, criterion_ids: [...item.criterion_ids, PENDING_DRAFT_CRITERION.id] }
+            : item,
+        ),
+      };
+    }
+
+    case "assign_criterion": {
+      const stage = state.briefStages.find((item) => item.id === action.stage_id);
+      if (!stage || stage.criterion_ids.includes(action.criterion_id)) return state;
+      return {
+        ...state,
+        seq: state.seq + 1,
+        briefStages: state.briefStages.map((item) =>
+          item.id === stage.id
+            ? { ...item, criterion_ids: [...item.criterion_ids, action.criterion_id] }
+            : item,
+        ),
+      };
+    }
+
+    case "open_role": {
+      if (refuseOpenRole(state, action.role_id)) return state;
+      const role = roleById(state, action.role_id);
+      if (!role || role.state !== "draft") return state;
+      const version = latestBriefVersion(state, role);
+      if (!version) return state;
+      return {
+        ...state,
+        seq: state.seq + 1,
+        roles: state.roles.map((item) =>
+          item.id === role.id
+            ? {
+                ...item,
+                state: "open",
+                // Opening pins the version. Every Search and every Review pins it too.
+                pinned_brief_version_id: version.id,
+                opened_at: NOW,
+              }
+            : item,
+        ),
+      };
+    }
+
+    // ── Sourcing ──────────────────────────────────────────────────────────────
 
     case "create_person_from_sighting": {
       const sighting = sightingById(state, action.sighting_id);
@@ -88,6 +154,8 @@ export function reducer(state: State, action: Action): State {
       ) {
         return state;
       }
+      const first = stagesFor(state, role.pinned_brief_version_id)[0];
+      if (!first) return state;
 
       const seq = state.seq + 1;
       const candidacyId = `cnd_new_${seq}`;
@@ -103,8 +171,8 @@ export function reducer(state: State, action: Action): State {
             person_id: person.id,
             role_id: role.id,
             brief_version_id: role.pinned_brief_version_id,
-            stage_id: "stg_sourced",
-            origin: "search",
+            stage_id: first.id,
+            channel_id: action.channel_id,
             created_at: NOW,
             // Set on insert. Ninety days, and nothing in this prototype can move it.
             auto_close_at: addDays(NOW, 90),
@@ -121,6 +189,7 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: `Candidacy created for ${person.full_name}.`,
+            stage_id: first.id,
           },
         ],
       };
@@ -131,6 +200,8 @@ export function reducer(state: State, action: Action): State {
       if (refuseCandidacy(state, action.role_id)) return state;
       const role = roleById(state, action.role_id);
       if (!role?.pinned_brief_version_id) return state;
+      const first = stagesFor(state, role.pinned_brief_version_id)[0];
+      if (!first) return state;
 
       const seq = state.seq + 1;
       const personId = `per_new_${seq}`;
@@ -175,8 +246,8 @@ export function reducer(state: State, action: Action): State {
             person_id: personId,
             role_id: role.id,
             brief_version_id: role.pinned_brief_version_id,
-            stage_id: "stg_sourced",
-            origin: "import",
+            stage_id: first.id,
+            channel_id: "chn_company_sites",
             created_at: NOW,
             auto_close_at: addDays(NOW, 90),
             closed_at: null,
@@ -192,17 +263,20 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: `Candidacy created by hand for ${action.full_name}, from ${action.source_name}.`,
+            stage_id: first.id,
           },
         ],
       };
     }
 
+    // ── The pipeline ──────────────────────────────────────────────────────────
+
     case "advance_stage": {
       if (refuseAdvance(state, action.candidacy_id)) return state;
       const candidacy = candidacyById(state, action.candidacy_id);
       if (!candidacy) return state;
-      const from = stageById(state, candidacy.stage_id);
-      const to = nextStage(state, candidacy.stage_id);
+      const from = stageOf(state, candidacy);
+      const to = nextStage(state, candidacy);
       if (!from || !to) return state;
 
       const seq = state.seq + 1;
@@ -210,9 +284,7 @@ export function reducer(state: State, action: Action): State {
         ...state,
         seq,
         candidacies: state.candidacies.map((item) =>
-          item.id === candidacy.id
-            ? { ...item, stage_id: to.id, closed_at: to.terminal ? NOW : item.closed_at }
-            : item,
+          item.id === candidacy.id ? { ...item, stage_id: to.id } : item,
         ),
         decisionEvents: [
           ...state.decisionEvents,
@@ -224,6 +296,7 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: `${from.label} → ${to.label}.`,
+            stage_id: to.id,
           },
         ],
       };
@@ -236,7 +309,7 @@ export function reducer(state: State, action: Action): State {
       if (action.status === "evidenced" && (!action.passage || !action.quote)) return state;
 
       const seq = state.seq + 1;
-      let review = reviewFor(state, candidacy.id);
+      let review: Review | undefined = reviewAtStage(state, candidacy.id, action.stage_id);
       let reviews = state.reviews;
 
       if (!review) {
@@ -245,17 +318,21 @@ export function reducer(state: State, action: Action): State {
           organization_id: state.organization.id,
           candidacy_id: candidacy.id,
           brief_version_id: candidacy.brief_version_id,
+          stage_id: action.stage_id,
           created_at: NOW,
           created_by: RECRUITER,
         };
         reviews = [...state.reviews, review];
       }
 
+      /* Recorded once per scorecard. A second reading at a later stage is a new finding
+       * beside the first, not a correction of it — which is how a candidate who gave a
+       * thin example on a bad day gets a second hearing without the record losing the
+       * first one. */
       const existing = state.findings.find(
         (finding) =>
           finding.review_id === review.id && finding.criterion_id === action.criterion_id,
       );
-      // Findings are recorded once. Re-recording is not an edit path in this prototype.
       if (existing) return state;
 
       const findingId = `fnd_new_${seq}`;
@@ -293,6 +370,7 @@ export function reducer(state: State, action: Action): State {
       const criterion = criteriaFor(state, candidacy.brief_version_id).find(
         (item) => item.id === action.criterion_id,
       );
+      const stage = stageById(state, action.stage_id);
 
       return {
         ...state,
@@ -321,7 +399,8 @@ export function reducer(state: State, action: Action): State {
             at: NOW,
             summary: `${criterion ? `Criterion ${criterion.position}` : "Criterion"} recorded as ${
               action.status === "evidenced" ? "evidenced" : "not found"
-            }.`,
+            } at ${stage?.label ?? "this stage"}.`,
+            stage_id: candidacy.stage_id,
           },
         ],
       };
@@ -359,6 +438,7 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: "Crosscheck signal resolved with a recorded note.",
+            stage_id: null,
           },
         ],
       };
@@ -396,6 +476,7 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: "Crosscheck signal overridden with a written reason.",
+            stage_id: null,
           },
         ],
       };
@@ -426,6 +507,22 @@ export function reducer(state: State, action: Action): State {
             decided_at: NOW,
           },
         ],
+        /* The written reason is what the candidate reads. There is no second, softer
+         * version for them and no internal version for us — one text, one audience,
+         * which is the only arrangement in which writing it honestly is the easy path. */
+        candidateMessages: [
+          ...state.candidateMessages,
+          {
+            id: `msg_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: candidacy.id,
+            kind: "rejection",
+            stage_id: null,
+            sent_at: NOW,
+            sent_by: RECRUITER,
+            body: action.reason_text.trim(),
+          },
+        ],
         decisionEvents: [
           ...state.decisionEvents,
           {
@@ -435,7 +532,8 @@ export function reducer(state: State, action: Action): State {
             type: "rejected",
             actor: RECRUITER,
             at: NOW,
-            summary: `Rejected · ${REASON_LABEL[action.reason_code]}.`,
+            summary: `Rejected · ${REASON_LABEL[action.reason_code]}. The written reason was sent to the candidate.`,
+            stage_id: "stg_rejected",
           },
         ],
       };
@@ -466,9 +564,6 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         seq,
-        candidacies: state.candidacies.map((item) =>
-          item.id === candidacy.id ? { ...item, stage_id: "stg_submitted" } : item,
-        ),
         submissionRecords: [
           ...state.submissionRecords,
           {
@@ -501,6 +596,102 @@ export function reducer(state: State, action: Action): State {
             actor: RECRUITER,
             at: NOW,
             summary: `Submission Record HF-2026-0${114 + seq} created and signed off by Ruth Halloway.`,
+            stage_id: candidacy.stage_id,
+          },
+        ],
+      };
+    }
+
+    // ── Communication ─────────────────────────────────────────────────────────
+
+    case "send_stage_message": {
+      const candidacy = candidacyById(state, action.candidacy_id);
+      const stage = stageById(state, action.stage_id);
+      if (!candidacy || !stage?.candidate_message) return state;
+      if (
+        state.candidateMessages.some(
+          (message) =>
+            message.candidacy_id === candidacy.id && message.stage_id === action.stage_id,
+        )
+      ) {
+        return state;
+      }
+
+      const seq = state.seq + 1;
+      return {
+        ...state,
+        seq,
+        candidateMessages: [
+          ...state.candidateMessages,
+          {
+            id: `msg_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: candidacy.id,
+            kind: "stage",
+            stage_id: action.stage_id,
+            sent_at: NOW,
+            sent_by: RECRUITER,
+            body: stage.candidate_message,
+          },
+        ],
+        decisionEvents: [
+          ...state.decisionEvents,
+          {
+            id: `evt_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: candidacy.id,
+            type: "message_sent",
+            actor: RECRUITER,
+            at: NOW,
+            summary: `${stage.label} message sent to the candidate.`,
+            stage_id: candidacy.stage_id,
+          },
+        ],
+      };
+    }
+
+    // ── After the placement ───────────────────────────────────────────────────
+
+    case "record_checkpoint": {
+      if (refuseCheckpoint(action.note)) return state;
+      const checkpoint = state.placementCheckpoints.find(
+        (item) => item.id === action.checkpoint_id,
+      );
+      if (!checkpoint || checkpoint.recorded_at !== null) return state;
+      const placement = state.placements.find((item) => item.id === checkpoint.placement_id);
+      if (!placement) return state;
+
+      const seq = state.seq + 1;
+      const feedback = action.brief_feedback.trim();
+
+      return {
+        ...state,
+        seq,
+        placementCheckpoints: state.placementCheckpoints.map((item) =>
+          item.id === checkpoint.id
+            ? {
+                ...item,
+                recorded_at: NOW,
+                recorded_by: RECRUITER,
+                note: action.note.trim(),
+                brief_feedback: feedback.length > 0 ? feedback : null,
+              }
+            : item,
+        ),
+        decisionEvents: [
+          ...state.decisionEvents,
+          {
+            id: `evt_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: placement.candidacy_id,
+            type: "checkpoint_recorded",
+            actor: RECRUITER,
+            at: NOW,
+            summary:
+              feedback.length > 0
+                ? `Day ${checkpoint.day} checkpoint recorded, with feedback for the next Brief at this client.`
+                : `Day ${checkpoint.day} checkpoint recorded.`,
+            stage_id: null,
           },
         ],
       };
@@ -520,13 +711,13 @@ export const REASON_LABEL: Record<string, string> = {
   client_declined: "Client declined",
 };
 
-function addDays(from: string, days: number): string {
-  return new Date(Date.parse(from) + days * 86_400_000).toISOString();
-}
-
 /** Where a character offset sits in a document, derived from the document itself. */
 function placeIn(state: State, documentId: string, charStart: number) {
   const document = state.documents.find((item) => item.id === documentId);
   if (!document) return { page: 1, paragraph: 1 };
   return placeOf({ pages: document.pages, paragraphs: document.paragraphs }, charStart);
+}
+
+function addDays(from: string, days: number): string {
+  return new Date(Date.parse(from) + days * 86_400_000).toISOString();
 }

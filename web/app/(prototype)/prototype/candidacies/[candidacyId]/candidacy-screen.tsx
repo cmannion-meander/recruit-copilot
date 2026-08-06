@@ -3,9 +3,11 @@
 /* Screen 5 — the candidacy.
  *
  * The stage control is live on every candidacy, including the ones where it will refuse.
- * On a candidacy with an incomplete scorecard it names the criteria with no entry, and
- * that refusal is drawn as a screen state with the next action attached — not a toast,
- * not a red border on a button, not a tooltip that vanishes when the pointer moves.
+ * It refuses on the criteria the CURRENT stage carries, not on the whole rubric —
+ * The Brief says which those are, and a stage that carries none gates nothing, because
+ * you contact somebody in order to learn the things.
+ *
+ * The whole rubric is still required, once, at submission.
  *
  * auto_close_at is on this screen and there is no control anywhere to extend or remove
  * it. Invariant 6: a deadline you can quietly turn off is not a promise to a candidate.
@@ -26,15 +28,21 @@ import {
   briefVersionById,
   candidacyById,
   cellsFor,
+  channelById,
   clientById,
+  criteriaAtStage,
   decisionFor,
   eventsFor,
   exclusionFor,
+  messageSentAtStage,
+  messagesFor,
   nextStage,
   personById,
+  placementFor,
   roleById,
   signalsFor,
-  stageById,
+  stageOf,
+  stagesFor,
   submissionFor,
   userById,
 } from "../../../_state/selectors";
@@ -59,14 +67,20 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
   const role = roleById(state, candidacy.role_id);
   const client = role ? clientById(state, role.client_id) : undefined;
   const version = briefVersionById(state, candidacy.brief_version_id);
-  const stage = stageById(state, candidacy.stage_id);
-  const onward = nextStage(state, candidacy.stage_id);
+  const stage = stageOf(state, candidacy);
+  const onward = nextStage(state, candidacy);
+  const stages = stagesFor(state, candidacy.brief_version_id);
   const cells = cellsFor(state, candidacy);
   const signals = signalsFor(state, candidacy.id);
   const decision = decisionFor(state, candidacy.id);
   const exclusion = exclusionFor(state, candidacy.id);
   const submission = submissionFor(state, candidacy.id);
+  const placement = placementFor(state, candidacy.id);
+  const messages = messagesFor(state, candidacy.id);
   const days = daysFromNow(candidacy.auto_close_at);
+
+  const owedHere = stage ? criteriaAtStage(state, candidacy, stage.id) : [];
+  const toldAtThisStage = stage ? messageSentAtStage(state, candidacy.id, stage.id) : true;
 
   return (
     <Screen>
@@ -87,6 +101,47 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
       />
 
       <Section
+        title="Where this candidacy is"
+        note="The stages The Brief defined before anybody was sourced, and what each one is responsible for."
+      >
+        <ol className="border-rule max-w-4xl border-t">
+          {stages.map((item) => {
+            const here = item.id === stage?.id;
+            const passed = stage?.position !== null && item.position < (stage?.position ?? 0);
+            return (
+              <li
+                key={item.id}
+                className={`border-rule border-b py-4 ${here ? "bg-paper-sunk -mx-4 px-4" : ""}`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                  <p className={`text-16 ${here ? "text-ink font-medium" : "text-ink-secondary"}`}>
+                    {item.label}
+                    {item.owner === "client" ? (
+                      <span className="text-ink-muted"> · the client's call</span>
+                    ) : null}
+                  </p>
+                  <StateMarker
+                    label={here ? "Here now" : passed ? "Passed" : "Ahead"}
+                    shape={here ? "filled" : passed ? "outlined" : "dotted"}
+                  />
+                </div>
+                <p className="text-14 text-ink-muted mt-1 max-w-[62ch]">{item.purpose}</p>
+                {item.criterion_ids.length > 0 ? (
+                  <ul className="mt-2">
+                    {criteriaAtStage(state, candidacy, item.id).map((criterion) => (
+                      <li key={criterion.id} className="text-14 text-ink-secondary">
+                        Evidences · {criterion.text}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </Section>
+
+      <Section
         title="Against The Brief"
         note={`Read against version ${version?.version}, pinned when this candidacy was created. A later version of The Brief does not move this record.`}
         aside={
@@ -94,7 +149,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
             href={`/prototype/candidacies/${candidacy.id}/review`}
             className="text-16 text-ink focus-visible:outline-ink underline decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
           >
-            The scorecard
+            The scorecards
           </Link>
         }
       >
@@ -116,10 +171,19 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
           {cells.map((cell) => (
             <li
               key={cell.criterion.id}
-              className="border-rule grid gap-x-6 gap-y-1 border-b py-3 sm:grid-cols-[3rem_1fr_9rem]"
+              className="border-rule grid gap-x-6 gap-y-1 border-b py-3 sm:grid-cols-[3rem_1fr_10rem]"
             >
               <p className="text-16 text-ink-muted tabular">{cell.criterion.position}</p>
-              <p className="text-16 text-ink">{cell.criterion.text}</p>
+              <div>
+                <p className="text-16 text-ink">{cell.criterion.text}</p>
+                {cell.stage ? (
+                  <p className="text-14 text-ink-muted mt-0.5">
+                    {cell.earlier.length > 0
+                      ? `Read at ${cell.earlier.map((item) => item.stage?.label).join(", then ")}, then ${cell.stage.label}`
+                      : `Read at ${cell.stage.label}`}
+                  </p>
+                ) : null}
+              </div>
               <p className="text-14 text-ink-secondary sm:text-right">
                 {cell.state === "evidenced"
                   ? "Evidenced"
@@ -143,42 +207,131 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
             reason={refusal.reason}
             action={refusal.action}
             items={refusal.items}
-            footnote={`Invariant ${refusal.invariant} · no advancement without a scorecard`}
+            footnote={
+              refusal.invariant === 6
+                ? "Invariant 6 · ghosting is impossible"
+                : `Invariant ${refusal.invariant} · no advancement without a scorecard`
+            }
           >
-            <Link
-              href={`/prototype/candidacies/${candidacy.id}/review`}
-              className="rounded-rc bg-ink text-ink-inverse hover:bg-ink-strong focus-visible:outline-ink px-4 py-2.5 text-16 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Open the scorecard
-            </Link>
+            {refusal.invariant === 6 && stage ? (
+              <Control
+                onClick={() => {
+                  dispatch({
+                    type: "send_stage_message",
+                    candidacy_id: candidacy.id,
+                    stage_id: stage.id,
+                  });
+                  setRefusal(null);
+                }}
+              >
+                Send the {stage.label} message
+              </Control>
+            ) : (
+              <Link
+                href={`/prototype/candidacies/${candidacy.id}/review`}
+                className="rounded-rc bg-ink text-ink-inverse hover:bg-ink-strong focus-visible:outline-ink px-4 py-2.5 text-16 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Open the scorecard
+              </Link>
+            )}
             <Control variant="secondary" onClick={() => setRefusal(null)}>
               Leave it here
             </Control>
           </Refusal>
         ) : (
-          <div className="flex flex-wrap items-center gap-5">
-            <p className="text-18 text-ink">
-              {stage?.label}
-              {onward ? <span className="text-ink-muted"> → {onward.label}</span> : null}
-            </p>
-            {onward ? (
-              <Control
-                onClick={() => {
-                  const refused = refuseAdvance(state, candidacy.id);
-                  setRefusal(refused);
-                  if (refused) return;
-                  dispatch({ type: "advance_stage", candidacy_id: candidacy.id });
-                }}
-              >
-                Advance to {onward.label}
-              </Control>
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-5">
+              <p className="text-18 text-ink">
+                {stage?.label}
+                {onward ? <span className="text-ink-muted"> → {onward.label}</span> : null}
+              </p>
+              {onward ? (
+                <Control
+                  onClick={() => {
+                    const refused = refuseAdvance(state, candidacy.id);
+                    setRefusal(refused);
+                    if (refused) return;
+                    dispatch({ type: "advance_stage", candidacy_id: candidacy.id });
+                  }}
+                >
+                  Advance to {onward.label}
+                </Control>
+              ) : (
+                <p className="text-16 text-ink-muted">
+                  This candidacy is closed. Nothing moves it from here.
+                </p>
+              )}
+            </div>
+            {owedHere.length > 0 ? (
+              <p className="text-14 text-ink-muted mt-4 max-w-[62ch]">
+                {stage?.label} is responsible for {owedHere.length}{" "}
+                {owedHere.length === 1 ? "criterion" : "criteria"}:{" "}
+                {owedHere.map((criterion) => criterion.cell_label).join(", ")}. Nothing else on the
+                rubric holds this candidacy here.
+              </p>
             ) : (
-              <p className="text-16 text-ink-muted">
-                This candidacy is closed. Nothing moves it from here.
+              <p className="text-14 text-ink-muted mt-4 max-w-[62ch]">
+                {stage?.label} carries no criteria. It tests interest, availability and money, and
+                none of those is on the rubric — so it gates nothing.
               </p>
             )}
           </div>
         )}
+      </Section>
+
+      <Section
+        title="What this person has been told"
+        note="The same rows the candidate reads. There is no internal version of a message, and no note about somebody that they cannot see."
+      >
+        <div className="max-w-4xl">
+          {messages.length === 0 ? (
+            <p className="text-16 text-ink-secondary">Nothing has been sent.</p>
+          ) : (
+            <ol className="border-rule border-t">
+              {messages.map((message) => (
+                <li key={message.id} className="border-rule border-b py-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                    <p className="rc-label text-ink-muted">
+                      {message.kind === "rejection"
+                        ? "Rejection"
+                        : message.kind === "auto_closure"
+                          ? "Auto-closure"
+                          : message.kind === "submission"
+                            ? "Submitted"
+                            : (stagesFor(state, candidacy.brief_version_id).find(
+                                (item) => item.id === message.stage_id,
+                              )?.label ?? "Stage")}
+                    </p>
+                    <p className="text-14 text-ink-muted tabular">{formatDate(message.sent_at)}</p>
+                  </div>
+                  <p className="text-16 text-ink-secondary mt-2 max-w-[70ch]">{message.body}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {stage && !stage.terminal && !toldAtThisStage ? (
+            <div className="border-rule mt-6 border border-dotted px-5 py-5">
+              <p className="text-16 text-ink max-w-[62ch]">
+                Nothing has been sent since this candidacy reached {stage.label}.
+              </p>
+              <p className="text-14 text-ink-muted mt-2 max-w-[70ch]">{stage.candidate_message}</p>
+              <Control
+                variant="secondary"
+                className="mt-4"
+                onClick={() =>
+                  dispatch({
+                    type: "send_stage_message",
+                    candidacy_id: candidacy.id,
+                    stage_id: stage.id,
+                  })
+                }
+              >
+                Send it
+              </Control>
+            </div>
+          ) : null}
+        </div>
       </Section>
 
       <Section
@@ -194,6 +347,26 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
       >
         <CrosscheckPanel signals={signals} />
       </Section>
+
+      {placement ? (
+        <Section
+          title="Placement"
+          note="The fee is earned at the end of probation, not on the start date. The checkpoints are the agency's own exposure written down."
+        >
+          <div className="max-w-[62ch]">
+            <p className="text-16 text-ink">
+              Started {formatDate(placement.started_on)} · probation ends{" "}
+              {formatDate(placement.probation_ends_on)}
+            </p>
+            <Link
+              href={`/prototype/candidacies/${candidacy.id}/placement`}
+              className="rounded-rc bg-ink text-ink-inverse hover:bg-ink-strong focus-visible:outline-ink mt-5 inline-block px-4 py-2.5 text-16 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              The first ninety days
+            </Link>
+          </div>
+        </Section>
+      ) : null}
 
       {submission ? (
         <Section title="Submission Record">
@@ -218,7 +391,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
       ) : !stage?.terminal ? (
         <Section
           title="Submission Record"
-          note="The artifact this whole product exists to produce. It cannot be created while a Crosscheck signal is open, and it cannot be edited once it is."
+          note="The artifact this whole product exists to produce. It cannot be created while a Crosscheck signal is open, it needs a finding against every criterion, and it cannot be edited once it exists."
         >
           <Link
             href={`/prototype/candidacies/${candidacy.id}/submission`}
@@ -246,7 +419,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
 
       <Section
         title="Rejection"
-        note="A reason code and written text. Both are required, and the refusal says which one is missing."
+        note="A reason code and written text. Both are required, the refusal says which one is missing, and what you write is what the candidate reads."
       >
         <RejectionPanel candidacy={candidacy} decision={decision} />
       </Section>
@@ -280,14 +453,9 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
             }
           />
           <RecordField
-            label="How this candidacy started"
-            value={
-              candidacy.origin === "search"
-                ? "Sourced. A search found them; they did not apply."
-                : candidacy.origin === "inbound"
-                  ? "Inbound. They applied."
-                  : "Imported by hand."
-            }
+            label="Channel"
+            value={channelById(state, candidacy.channel_id)?.name}
+            empty="Not recorded."
           />
           <RecordField
             label="Email"

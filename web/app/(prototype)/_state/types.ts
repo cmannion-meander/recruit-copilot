@@ -1,5 +1,5 @@
 import type { PrototypeState } from "../_fixtures";
-import type { CriterionId, FindingStatus, ReasonCode } from "../_fixtures/types";
+import type { CriterionId, FindingStatus, ReasonCode, StageId } from "../_fixtures/types";
 
 /* seq is the prototype's whole source of new identity. No uuid, no Math.random, no
  * Date.now — a reload has to land on the same screen, and an id that differs between
@@ -14,10 +14,19 @@ export type PassageSource =
 export type Action =
   /** Back to the fixture state, exactly. */
   | { type: "reset" }
+
+  // ── The Brief ─────────────────────────────────────────────────────────────────
+  /** The third criterion the client was coming back with. */
+  | { type: "add_criterion"; role_id: string }
+  /** Say which stage evidences a criterion. Required before the role can open. */
+  | { type: "assign_criterion"; criterion_id: CriterionId; stage_id: StageId }
+  | { type: "open_role"; role_id: string }
+
+  // ── Sourcing ──────────────────────────────────────────────────────────────────
   /** A sighting becomes a Person. The sighting is the resolving source — invariant 9. */
   | { type: "create_person_from_sighting"; sighting_id: string }
   /** A Person becomes a Candidacy on a role. */
-  | { type: "create_candidacy"; person_id: string; role_id: string }
+  | { type: "create_candidacy"; person_id: string; role_id: string; channel_id: string }
   /** A person entered by hand, with the source that resolves to them. */
   | {
       type: "create_person_by_hand";
@@ -30,10 +39,14 @@ export type Action =
       snapshot_excerpt: string;
       role_id: string;
     }
+
+  // ── The pipeline ──────────────────────────────────────────────────────────────
   | { type: "advance_stage"; candidacy_id: string }
   | {
       type: "record_finding";
       candidacy_id: string;
+      /** The scorecard this finding belongs to. One review per stage. */
+      stage_id: StageId;
       criterion_id: CriterionId;
       status: FindingStatus;
       passage: PassageSource | null;
@@ -47,4 +60,17 @@ export type Action =
       reason_code: ReasonCode;
       reason_text: string;
     }
-  | { type: "create_submission"; candidacy_id: string };
+  | { type: "create_submission"; candidacy_id: string }
+
+  // ── Communication ─────────────────────────────────────────────────────────────
+  /** Send the message The Brief holds for this stage. */
+  | { type: "send_stage_message"; candidacy_id: string; stage_id: StageId }
+
+  // ── After the placement ───────────────────────────────────────────────────────
+  | {
+      type: "record_checkpoint";
+      checkpoint_id: string;
+      note: string;
+      /** What the next Brief for this client should say differently. Optional. */
+      brief_feedback: string;
+    };

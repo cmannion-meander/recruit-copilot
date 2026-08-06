@@ -17,7 +17,7 @@
 import { EvidenceCitation } from "@/components/evidence-citation";
 import { formatDate } from "../../../_fixtures/clock";
 import { usePrototype } from "../../../_state/provider";
-import { candidacyById, submissionByToken } from "../../../_state/selectors";
+import { candidacyById, messagesFor, stageOf, submissionByToken } from "../../../_state/selectors";
 
 export function CandidateScreen({ token }: { token: string }) {
   const { state } = usePrototype();
@@ -35,6 +35,8 @@ export function CandidateScreen({ token }: { token: string }) {
   }
 
   const candidacy = candidacyById(state, record.candidacy_id);
+  const stage = candidacy ? stageOf(state, candidacy) : undefined;
+  const sent = candidacy ? messagesFor(state, candidacy.id) : [];
   const evidenced = record.snapshot.lines.filter((line) => line.status === "evidenced").length;
 
   return (
@@ -104,6 +106,34 @@ export function CandidateScreen({ token }: { token: string }) {
             </li>
           ))}
         </ol>
+      </section>
+
+      {/* Step four, from the candidate's side. Everything they were sent, in order,
+          with dates — so "where am I in this?" has an answer that is not an email
+          they have to go and find. */}
+      <section className="border-rule mt-14 border-t pt-8">
+        <h2 className="text-22 text-ink font-medium">Where you are</h2>
+        {stage ? (
+          <p className="text-16 text-ink-secondary mt-3 max-w-[62ch]">
+            {stage.terminal
+              ? `This is closed: ${stage.label.toLowerCase()}.`
+              : `You are at ${stage.label.toLowerCase()}.`}
+          </p>
+        ) : null}
+        {sent.length > 0 ? (
+          <ol className="border-rule mt-6 border-t">
+            {sent.map((message) => (
+              <li key={message.id} className="border-rule border-b py-4">
+                <p className="text-14 text-ink-muted tabular">{formatDate(message.sent_at)}</p>
+                <p className="text-16 text-ink-secondary mt-2 max-w-[62ch]">{message.body}</p>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        <p className="text-14 text-ink-muted mt-4 max-w-[62ch]">
+          Everything sent to you about this role, in order. There is no version of any of it written
+          for anyone else.
+        </p>
       </section>
 
       <section className="border-rule mt-14 border-t pt-8">
