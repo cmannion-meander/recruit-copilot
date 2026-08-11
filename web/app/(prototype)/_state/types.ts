@@ -52,6 +52,10 @@ export type Action =
       passage: PassageSource | null;
       quote: string | null;
     }
+  /* Move auto_close_at out by thirty days. The message is not optional and it is
+   * not internal: what is written here goes to the candidate verbatim and is the
+   * reason on the record — invariant 6, ADR 0012. */
+  | { type: "extend_auto_close"; candidacy_id: string; message_text: string }
   | { type: "resolve_signal"; signal_id: string; note: string }
   | { type: "override_signal"; signal_id: string; reason_text: string }
   | {

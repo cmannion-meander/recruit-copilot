@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
  * countdown turns a promise to a candidate into a gauge, and the number stops being
  * read the moment the shape can be glanced at instead.
  *
- * There is no control here and there is not one anywhere else either: invariant 6 says
- * the deadline cannot be extended or disabled, so the interface offers nothing to press.
- * A deadline you can quietly turn off is not a promise.
+ * There is no control here. The deadline cannot be disabled, and it moves only in the
+ * same act that tells the candidate something — a stage transition, or an extension
+ * whose written message goes to them verbatim (ADR 0012). A deadline you can quietly
+ * turn off is not a promise.
  */
 export function DaysRemaining({
   days,

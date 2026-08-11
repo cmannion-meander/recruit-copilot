@@ -11,7 +11,7 @@
  * permission level; here it is simply that no action exists.
  */
 import { initialState } from "../_fixtures";
-import { NOW } from "../_fixtures/clock";
+import { formatDateShort, NOW } from "../_fixtures/clock";
 import { placeOf } from "../_fixtures/offsets";
 import { provenanceOfEvidence } from "../_fixtures/provenance";
 import { PENDING_DRAFT_CRITERION } from "../_fixtures/roles";
@@ -20,6 +20,7 @@ import {
   refuseAdvance,
   refuseCandidacy,
   refuseCheckpoint,
+  refuseExtension,
   refuseOpenRole,
   refuseOverride,
   refusePerson,
@@ -46,6 +47,13 @@ import type { Action, State } from "./types";
 export const initialPrototypeState: State = { ...initialState, seq: 0 };
 
 const RECRUITER = "usr_ruth_halloway";
+
+/* Fixed increments, not date pickers. Ninety days on creation and on every stage
+ * transition; thirty on a manual extension, which re-flags at seven days out — so
+ * a stalled candidacy costs a fresh message every month rather than disappearing.
+ * ADR 0012. */
+const AUTO_CLOSE_DAYS = 90;
+const EXTENSION_DAYS = 30;
 
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -174,8 +182,8 @@ export function reducer(state: State, action: Action): State {
             stage_id: first.id,
             channel_id: action.channel_id,
             created_at: NOW,
-            // Set on insert. Ninety days, and nothing in this prototype can move it.
-            auto_close_at: addDays(NOW, 90),
+            // Set on insert. It moves only with a message to the candidate — ADR 0012.
+            auto_close_at: addDays(NOW, AUTO_CLOSE_DAYS),
             closed_at: null,
           },
         ],
@@ -249,7 +257,7 @@ export function reducer(state: State, action: Action): State {
             stage_id: first.id,
             channel_id: "chn_company_sites",
             created_at: NOW,
-            auto_close_at: addDays(NOW, 90),
+            auto_close_at: addDays(NOW, AUTO_CLOSE_DAYS),
             closed_at: null,
           },
         ],
@@ -284,7 +292,16 @@ export function reducer(state: State, action: Action): State {
         ...state,
         seq,
         candidacies: state.candidacies.map((item) =>
-          item.id === candidacy.id ? { ...item, stage_id: to.id } : item,
+          item.id === candidacy.id
+            ? {
+                ...item,
+                stage_id: to.id,
+                /* refuseAdvance has already required the stage message, so the
+                 * candidate was just told something — the one act that may move
+                 * the deadline. ADR 0012. */
+                auto_close_at: addDays(NOW, AUTO_CLOSE_DAYS),
+              }
+            : item,
         ),
         decisionEvents: [
           ...state.decisionEvents,
@@ -297,6 +314,50 @@ export function reducer(state: State, action: Action): State {
             at: NOW,
             summary: `${from.label} → ${to.label}.`,
             stage_id: to.id,
+          },
+        ],
+      };
+    }
+
+    case "extend_auto_close": {
+      if (refuseExtension(state, action.candidacy_id, action.message_text)) return state;
+      const candidacy = candidacyById(state, action.candidacy_id);
+      if (!candidacy) return state;
+
+      const seq = state.seq + 1;
+      const extended = addDays(NOW, EXTENSION_DAYS);
+      return {
+        ...state,
+        seq,
+        candidacies: state.candidacies.map((item) =>
+          item.id === candidacy.id ? { ...item, auto_close_at: extended } : item,
+        ),
+        /* One text, one audience. The message is the reason; there is no internal
+         * version, which is the arrangement in which writing it honestly is easy. */
+        candidateMessages: [
+          ...state.candidateMessages,
+          {
+            id: `msg_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: candidacy.id,
+            kind: "extension",
+            stage_id: candidacy.stage_id,
+            sent_at: NOW,
+            sent_by: RECRUITER,
+            body: action.message_text.trim(),
+          },
+        ],
+        decisionEvents: [
+          ...state.decisionEvents,
+          {
+            id: `evt_new_${seq}`,
+            organization_id: state.organization.id,
+            candidacy_id: candidacy.id,
+            type: "deadline_extended",
+            actor: RECRUITER,
+            at: NOW,
+            summary: `Auto-closure moved from ${formatDateShort(candidacy.auto_close_at)} to ${formatDateShort(extended)}. The message was sent to the candidate.`,
+            stage_id: candidacy.stage_id,
           },
         ],
       };

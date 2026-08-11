@@ -132,3 +132,8 @@ Thumbs.db
 *~
 scratch/
 tmp/
+
+# ---------------------------------------------------------------------------------------
+# Third-party material kept locally for reference, not redistributed
+# ---------------------------------------------------------------------------------------
+docs/transcripts/

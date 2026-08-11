@@ -19,6 +19,7 @@
   --rc-ink-strong: #080b10; /* pressed/hover on an ink fill */
   --rc-ink-inverse: var(--rc-paper); /* 16.5:1 on --rc-ink */
   --rc-paper-raised: #ffffff; /* a card lifted off --rc-paper */
+  --rc-paper-sunk-hover: #e3e0d9; /* hover on a --rc-paper-sunk surface, one step darker */
 
   /* Rules.
    * Two distinct jobs, deliberately two tokens. A card outline is decoration and

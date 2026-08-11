@@ -128,7 +128,7 @@ export const candidacies: Candidacy[] = [
     stage_id: "stg_fc_sourced",
     channel_id: "chn_company_sites",
     created_at: "2026-03-14T13:18:00.000Z",
-    // Three days. Nothing in the interface can move this.
+    // Three days. Moving it costs a message to the candidate — ADR 0012.
     auto_close_at: "2026-08-08T09:00:00.000Z",
     closed_at: null,
   },

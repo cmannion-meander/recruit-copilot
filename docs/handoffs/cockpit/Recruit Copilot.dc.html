@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #F6F5F2; color: #12171F; }
+  body { font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: #12171F; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  a:hover { color: #080B10; }
+  button, select, input { font-family: inherit; }
+  ::placeholder { color: #948D7E; }
+  @keyframes rc-drawer-in { from { transform: translateX(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes rc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-height:620px;background:#F6F5F2;overflow:hidden">
+
+  <aside style="width:206px;flex:none;display:flex;flex-direction:column;background:#EDEBE6;border-right:1px solid #DCD9D2">
+    <div style="padding:13px 16px 12px">
+      <p style="margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;letter-spacing:.12em;text-transform:uppercase;color:#12171F">Halloway &amp; Finch</p>
+    </div>
+    <nav aria-label="Sections" style="display:flex;flex-direction:column;padding:0 8px;gap:1px">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="5">
+        <button type="button" onClick="{{ item.onClick }}" aria-current="{{ item.current }}" style="{{ item.style }}" style-hover="background:#E3E0D9">
+          <span aria-hidden="true" style="{{ item.markStyle }}"></span>
+          <span>{{ item.label }}</span>
+          <span style="{{ item.badgeStyle }}">{{ item.badge }}</span>
+        </button>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;padding:11px 16px;border-top:1px solid #DCD9D2">
+      <p style="margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Prototype · synthetic data</p>
+    </div>
+  </aside>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <header style="flex:none;display:flex;align-items:center;gap:14px;padding:6px 20px;min-height:45px;border-bottom:1px solid #DCD9D2;flex-wrap:wrap">
+      <select aria-label="Client and role context" value="{{ roleFilter }}" onChange="{{ onRole }}" style="flex:0 1 auto;min-width:150px;max-width:330px;border:1px solid #948D7E;border-radius:3px;background:transparent;color:#12171F;font-size:14px;padding:3px 6px">
+        <option value="all">All clients · all roles</option>
+        <option value="rol_financial_controller">Bramhall Precision Group · Financial Controller</option>
+        <option value="rol_finance_business_partner">Calder Vale Foods · Finance Business Partner</option>
+        <option value="rol_management_accountant">Calder Vale Foods · Management Accountant</option>
+      </select>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;min-width:0;flex:1 1 200px;justify-content:flex-end">
+        <input type="search" placeholder="Search" aria-label="Search candidates" value="{{ query }}" onChange="{{ onQuery }}" style="flex:1 1 220px;min-width:110px;max-width:240px;border:1px solid #948D7E;border-radius:3px;background:transparent;color:#12171F;font-size:14px;padding:3px 8px">
+        <p style="margin:0;font-size:14px;color:#636B78;white-space:nowrap">Ruth Halloway</p>
+      </div>
+    </header>
+
+    <div style="flex:1;min-height:0;overflow:auto;padding:16px 20px 24px">
+
+      <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:500;letter-spacing:-.01em;color:#12171F">The desk</h1>
+            <p style="margin:0;font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">5 August 2026</p>
+            <button type="button" onClick="{{ onToggleAbout }}" style="{{ aboutBtnStyle }}" style-hover="color:#12171F;border-color:#636B78">{{ aboutLabel }}</button>
+          </div>
+
+          <sc-if value="{{ aboutOpen }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:8px 0 0;max-width:70ch;font-size:14px;line-height:1.5;color:#636B78;text-wrap:pretty;animation:rc-fade-in .14s ease-out">This screen stays empty unless something needs you. Nothing on it ranks a person, and no figure here stands in for a role, a client or a candidate.</p>
+          </sc-if>
+
+          <p style="margin:22px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ needsLabel }}</p>
+
+          <div style="margin-top:8px;border-top:1px solid #12171F">
+            <sc-for list="{{ attention }}" as="item" hint-placeholder-count="6">
+              <button type="button" onClick="{{ item.onGo }}" style="display:grid;grid-template-columns:3px 148px minmax(0,1fr) auto;column-gap:16px;align-items:baseline;width:100%;text-align:left;border:0;border-bottom:1px solid #DCD9D2;background:transparent;padding:11px 8px 11px 0;cursor:pointer;font-family:inherit" style-hover="background:#EDEBE6">
+                <span aria-hidden="true" style="align-self:stretch;background:#12171F"></span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#39424F">{{ item.kind }}</span>
+                <span style="min-width:0">
+                  <span style="display:block;font-size:16px;line-height:1.35;color:#12171F">{{ item.subject }}</span>
+                  <span style="display:block;margin-top:2px;max-width:70ch;font-size:14px;line-height:1.45;color:#636B78;text-wrap:pretty">{{ item.fact }}</span>
+                </span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78;white-space:nowrap">{{ item.go }}</span>
+              </button>
+            </sc-for>
+          </div>
+
+          <p style="margin:26px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Roles</p>
+          <div style="margin-top:8px;border-top:1px solid #DCD9D2">
+            <sc-for list="{{ roles }}" as="role" hint-placeholder-count="3">
+              <button type="button" onClick="{{ role.onOpen }}" style="display:grid;grid-template-columns:minmax(0,1fr) 190px 300px 92px;column-gap:16px;align-items:center;width:100%;min-width:880px;text-align:left;border:0;border-bottom:1px solid #DCD9D2;background:transparent;padding:9px 8px 9px 0;cursor:pointer;font-family:inherit" style-hover="background:#EDEBE6">
+                <span style="min-width:0">
+                  <span style="display:block;font-size:16px;line-height:1.35;color:#12171F">{{ role.title }}</span>
+                  <span style="display:block;font-size:14px;color:#636B78">{{ role.client }}</span>
+                </span>
+                <span style="display:inline-flex;align-items:center;gap:8px">
+                  <span aria-hidden="true" style="{{ role.markStyle }}"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ role.stateWord }}</span>
+                </span>
+                <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ role.funnel }}</span>
+                <span style="{{ role.flagStyle }}">{{ role.flag }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCandidacies }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:500;letter-spacing:-.01em;color:#12171F">{{ heading }}</h1>
+            <p style="margin:0;font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ countLine }}</p>
+            <button type="button" onClick="{{ onToggleAbout }}" style="{{ aboutBtnStyle }}" style-hover="color:#12171F;border-color:#636B78">{{ aboutLabel }}</button>
+          </div>
+
+          <sc-if value="{{ aboutOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:8px;animation:rc-fade-in .14s ease-out">
+              <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.5;color:#636B78;text-wrap:pretty">One row is one person on one role, against the criteria of the Brief version pinned when the role opened. Sorting is a filing order: there is no sort by evidence, because a column ordered by assessment reads as a shortlist.</p>
+              <dl style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 22px;margin:10px 0 0">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;flex:none;background:#0E6C89"></span><dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Filled</dt><dd style="margin:0;font-size:14px;color:#39424F">evidenced, with a quoted passage</dd></div>
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;flex:none;border:2px solid #8B5A11"></span><dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Outlined</dt><dd style="margin:0;font-size:14px;color:#39424F">looked for, not found</dd></div>
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;flex:none;border:1px dotted #636B78"></span><dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Dotted</dt><dd style="margin:0;font-size:14px;color:#39424F">no finding recorded yet</dd></div>
+              </dl>
+            </div>
+          </sc-if>
+
+          <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <select aria-label="Filter by stage" value="{{ stageFilter }}" onChange="{{ onStage }}" style="border:1px solid #948D7E;border-radius:3px;background:transparent;color:#39424F;font-size:14px;padding:3px 6px">
+              <option value="all">Any stage</option>
+              <option value="Sourced">Sourced</option>
+              <option value="Contacted">Contacted</option>
+              <option value="Screening call">Screening call</option>
+              <option value="Competency call">Competency call</option>
+              <option value="Submitted">Submitted</option>
+              <option value="Placed">Placed</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Excluded">Excluded</option>
+              <option value="Closed, no response">Closed, no response</option>
+            </select>
+            <select aria-label="Filter by channel" value="{{ channelFilter }}" onChange="{{ onChannel }}" style="border:1px solid #948D7E;border-radius:3px;background:transparent;color:#39424F;font-size:14px;padding:3px 6px">
+              <option value="all">Any channel</option>
+              <option value="Company sites">Company sites</option>
+              <option value="Trade press">Trade press</option>
+              <option value="Inbound apply">Inbound apply</option>
+              <option value="Referral">Referral</option>
+              <option value="Agency network">Agency network</option>
+            </select>
+            <select aria-label="Filter by record state" value="{{ stateFilter }}" onChange="{{ onState }}" style="border:1px solid #948D7E;border-radius:3px;background:transparent;color:#39424F;font-size:14px;padding:3px 6px">
+              <option value="all">Open and closed</option>
+              <option value="open">Open records</option>
+              <option value="closed">Closed records</option>
+            </select>
+            <button type="button" onClick="{{ onToggleFlagged }}" aria-pressed="{{ flaggedOnly }}" style="{{ flaggedBtnStyle }}" style-hover="border-color:#636B78">{{ flaggedLabel }}</button>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+              <label for="rc-sort" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Sort</label>
+              <select id="rc-sort" value="{{ sort }}" onChange="{{ onSort }}" style="border:1px solid #948D7E;border-radius:3px;background:transparent;color:#39424F;font-size:14px;padding:3px 6px">
+                <option value="family">Family name</option>
+                <option value="stage">Stage</option>
+                <option value="closing">Days to auto-closure</option>
+                <option value="added">Date added</option>
+              </select>
+            </div>
+          </div>
+
+          <div role="table" aria-label="Candidacies" style="margin-top:10px;border-top:1px solid #12171F">
+            <div role="row" style="display:grid;grid-template-columns:3px minmax(210px,1.25fr) 152px 232px 128px 330px;column-gap:16px;align-items:center;padding:5px 0;border-bottom:1px solid #DCD9D2;min-width:1141px">
+              <span></span>
+              <span role="columnheader" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Candidate</span>
+              <span role="columnheader" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Role</span>
+              <span role="columnheader" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Criteria, in Brief order</span>
+              <span role="columnheader" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Stage</span>
+                            <span role="columnheader" style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Attention</span>
+            </div>
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
+              <div role="row" tabIndex="0" aria-selected="{{ row.isSelected }}" onClick="{{ row.onSelect }}" onKeyDown="{{ row.onKey }}" style="{{ row.style }}" style-hover="background:#EDEBE6">
+                <span aria-hidden="true" style="{{ row.markerStyle }}"></span>
+                <span style="min-width:0;display:flex;align-items:baseline;gap:8px">
+                  <span style="{{ row.nameStyle }}">{{ row.name }}</span>
+                  <span style="font-size:14px;color:#636B78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.employer }}</span>
+                </span>
+                <span style="font-size:14px;color:#636B78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.role }}</span>
+                <span style="display:flex;align-items:center;gap:10px">
+                  <span role="img" aria-label="{{ row.cellsLabel }}" style="display:flex;align-items:center;gap:6px">
+                    <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="5">
+                      <span title="{{ cell.title }}" style="{{ cell.style }}"></span>
+                    </sc-for>
+                  </span>
+                  <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums;white-space:nowrap">{{ row.evidencedLine }}</span>
+                </span>
+                <span style="font-size:14px;color:#636B78;white-space:nowrap">{{ row.stage }}</span>
+                                <span style="{{ row.flagStyle }}">{{ row.flag }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRoles }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:500;letter-spacing:-.01em;color:#12171F">Roles</h1>
+            <p style="margin:0;font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">3 roles · 2 clients</p>
+          </div>
+          <div style="margin-top:14px;border-top:1px solid #12171F">
+            <div style="display:grid;grid-template-columns:3px minmax(0,1.2fr) minmax(0,1fr) 140px 170px 108px 92px;column-gap:16px;padding:5px 0;border-bottom:1px solid #DCD9D2;min-width:940px">
+              <span></span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Role</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Client</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">State</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">The Brief</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Candidacies</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Attention</span>
+            </div>
+            <sc-for list="{{ roles }}" as="role" hint-placeholder-count="3">
+              <div tabIndex="0" onClick="{{ role.onSelect }}" onKeyDown="{{ role.onKey }}" style="{{ role.rowStyle }}" style-hover="background:#EDEBE6">
+                <span aria-hidden="true" style="{{ role.markerStyle }}"></span>
+                <span style="font-size:16px;color:#12171F;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ role.title }}</span>
+                <span style="font-size:14px;color:#636B78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ role.client }}</span>
+                <span style="display:inline-flex;align-items:center;gap:8px">
+                  <span aria-hidden="true" style="{{ role.markStyle }}"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ role.stateWord }}</span>
+                </span>
+                <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ role.briefLine }}</span>
+                <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ role.count }}</span>
+                <span style="{{ role.flagStyle }}">{{ role.flag }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSourcing }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:500;letter-spacing:-.01em;color:#12171F">Sourcing runs</h1>
+            <p style="margin:0;font-size:14px;color:#636B78">Bramhall Precision Group · Financial Controller</p>
+          </div>
+
+          <p style="margin:20px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Read, and not yet anybody · 3</p>
+          <div style="margin-top:8px;border-top:1px solid #12171F">
+            <sc-for list="{{ sightings }}" as="sight" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:3px minmax(0,1fr) 300px 132px;column-gap:16px;align-items:center;border-bottom:1px solid #DCD9D2;padding:10px 0">
+                <span aria-hidden="true" style="align-self:stretch;background:#12171F"></span>
+                <span style="min-width:0">
+                  <span style="display:block;font-size:16px;line-height:1.35;color:#12171F">{{ sight.name }}</span>
+                  <span style="display:block;font-size:14px;color:#636B78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sight.headline }}</span>
+                </span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#636B78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sight.source }}</span>
+                <button type="button" style="border:1px solid #948D7E;border-radius:3px;background:transparent;color:#12171F;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;cursor:pointer" style-hover="background:#EDEBE6">Create person</button>
+              </div>
+            </sc-for>
+          </div>
+
+          <p style="margin:26px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Runs · both pinned to Brief version 2</p>
+          <div style="margin-top:8px;border-top:1px solid #DCD9D2">
+            <div style="display:grid;grid-template-columns:150px 150px minmax(0,1fr);column-gap:16px;align-items:baseline;border-bottom:1px solid #DCD9D2;padding:10px 0">
+              <span style="font-size:16px;color:#12171F;font-variant-numeric:tabular-nums">14 March 2026</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Scope revision 1</span>
+              <span style="max-width:70ch;font-size:14px;line-height:1.45;color:#636B78;text-wrap:pretty">Company sites, trade press and one archived team page. Nine sightings across eight people.</span>
+            </div>
+            <div style="display:grid;grid-template-columns:150px 150px minmax(0,1fr);column-gap:16px;align-items:baseline;border-bottom:1px solid #DCD9D2;padding:10px 0">
+              <span style="font-size:16px;color:#12171F;font-variant-numeric:tabular-nums">2 June 2026</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Scope revision 2</span>
+              <span style="max-width:70ch;font-size:14px;line-height:1.45;color:#636B78;text-wrap:pretty">Widened to plastics, composites and process manufacturing. Four sightings. The rubric did not move.</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:500;letter-spacing:-.01em;color:#12171F">Settings</h1>
+          <p style="margin:10px 0 0;max-width:70ch;font-size:16px;line-height:1.5;color:#636B78;text-wrap:pretty">Nothing is open yet.</p>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <sc-if value="{{ hasCandidate }}" hint-placeholder-val="{{ false }}">
+    <aside aria-label="Candidacy detail" style="position:fixed;top:0;right:0;bottom:0;width:460px;max-width:46vw;z-index:40;display:flex;flex-direction:column;background:#FFFFFF;border-left:1px solid #12171F;animation:rc-drawer-in .16s ease-out">
+      <div style="flex:none;display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid #DCD9D2">
+        <div style="min-width:0">
+          <p style="margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ detail.eyebrow }}</p>
+          <h2 style="margin:3px 0 0;font-size:22px;line-height:1.3;font-weight:600;color:#12171F;letter-spacing:-.01em">{{ detail.name }}</h2>
+          <p style="margin:2px 0 0;max-width:70ch;font-size:14px;line-height:1.45;color:#636B78">{{ detail.headline }}</p>
+        </div>
+        <button type="button" onClick="{{ onClose }}" aria-label="Close detail" style="margin-left:auto;flex:none;border:1px solid #948D7E;border-radius:3px;background:transparent;color:#636B78;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;cursor:pointer" style-hover="background:#EDEBE6;color:#12171F">Close</button>
+      </div>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:0 18px 22px">
+        <sc-if value="{{ detail.hasFlag }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:3px minmax(0,1fr);column-gap:12px;margin:12px 0 0;border-top:1px solid #12171F;border-bottom:1px solid #12171F;padding:9px 0">
+            <span aria-hidden="true" style="align-self:stretch;background:#12171F"></span>
+            <span>
+              <span style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#12171F">{{ detail.flag }}</span>
+              <span style="display:block;margin-top:3px;max-width:70ch;font-size:14px;line-height:1.45;color:#39424F;text-wrap:pretty">{{ detail.flagDetail }}</span>
+            </span>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 0;border-bottom:1px solid #DCD9D2">
+          <span style="display:inline-flex;align-items:center;gap:8px">
+            <span aria-hidden="true" style="{{ detail.stageMarkStyle }}"></span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#39424F">{{ detail.stage }}</span>
+          </span>
+          <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ detail.closure }}</span>
+        </div>
+
+        <dl style="display:grid;grid-template-columns:104px 1fr;column-gap:14px;row-gap:4px;margin:10px 0 0">
+          <dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Employer</dt>
+          <dd style="margin:0;font-size:14px;color:#39424F">{{ detail.employer }}</dd>
+          <dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Location</dt>
+          <dd style="margin:0;font-size:14px;color:#39424F">{{ detail.location }}</dd>
+          <dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Contact</dt>
+          <dd style="margin:0;font-size:14px;color:#39424F;font-variant-numeric:tabular-nums">{{ detail.contact }}</dd>
+          <dt style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Channel</dt>
+          <dd style="margin:0;font-size:14px;color:#39424F">{{ detail.channel }}</dd>
+        </dl>
+
+        <p style="margin:16px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ detail.briefLine }}</p>
+        <ol style="list-style:none;margin:6px 0 0;padding:0;border-top:1px solid #DCD9D2">
+          <sc-for list="{{ detail.criteria }}" as="item" hint-placeholder-count="5">
+            <li style="display:grid;grid-template-columns:15px 1fr;column-gap:10px;padding:8px 0;border-bottom:1px solid #DCD9D2">
+              <span aria-hidden="true" style="{{ item.markStyle }}"></span>
+              <div style="min-width:0">
+                <p style="margin:0;max-width:70ch;font-size:16px;line-height:1.4;color:#12171F;text-wrap:pretty">{{ item.text }}</p>
+                <sc-if value="{{ item.hasQuote }}" hint-placeholder-val="{{ false }}">
+                  <blockquote style="margin:5px 0 0;padding-left:10px;border-left:2px solid #0E6C89">
+                    <p style="margin:0;max-width:70ch;font-family:'IBM Plex Serif',Georgia,serif;font-size:14px;line-height:1.5;color:#12171F;text-wrap:pretty">{{ item.quote }}</p>
+                    <cite style="display:block;margin-top:3px;font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#636B78">{{ item.source }}</cite>
+                  </blockquote>
+                </sc-if>
+                <sc-if value="{{ item.noQuote }}" hint-placeholder-val="{{ false }}">
+                  <p style="margin:3px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:{{ item.wordColor }}">{{ item.word }}</p>
+                </sc-if>
+              </div>
+            </li>
+          </sc-for>
+        </ol>
+      </div>
+    </aside>
+  </sc-if>
+
+  <sc-if value="{{ hasRole }}" hint-placeholder-val="{{ false }}">
+    <aside aria-label="Role detail" style="position:fixed;top:0;right:0;bottom:0;width:460px;max-width:46vw;z-index:40;display:flex;flex-direction:column;background:#FFFFFF;border-left:1px solid #12171F;animation:rc-drawer-in .16s ease-out">
+      <div style="flex:none;display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid #DCD9D2">
+        <div style="min-width:0">
+          <p style="margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">{{ roleDetail.client }}</p>
+          <h2 style="margin:3px 0 0;font-size:22px;line-height:1.3;font-weight:600;color:#12171F;letter-spacing:-.01em">{{ roleDetail.title }}</h2>
+          <p style="margin:2px 0 0;font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ roleDetail.briefLine }}</p>
+        </div>
+        <button type="button" onClick="{{ onClose }}" aria-label="Close detail" style="margin-left:auto;flex:none;border:1px solid #948D7E;border-radius:3px;background:transparent;color:#636B78;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;cursor:pointer" style-hover="background:#EDEBE6;color:#12171F">Close</button>
+      </div>
+      <div style="flex:1;min-height:0;overflow:auto;padding:0 18px 22px">
+        <sc-if value="{{ roleDetail.hasFlag }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:3px minmax(0,1fr);column-gap:12px;margin:12px 0 0;border-top:1px solid #12171F;border-bottom:1px solid #12171F;padding:9px 0">
+            <span aria-hidden="true" style="align-self:stretch;background:#12171F"></span>
+            <span>
+              <span style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#12171F">{{ roleDetail.flag }}</span>
+              <span style="display:block;margin-top:3px;max-width:70ch;font-size:14px;line-height:1.45;color:#39424F;text-wrap:pretty">{{ roleDetail.flagDetail }}</span>
+            </span>
+          </div>
+        </sc-if>
+
+        <p style="margin:16px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">What must be evidenced, and where</p>
+        <ol style="list-style:none;margin:6px 0 0;padding:0;border-top:1px solid #DCD9D2">
+          <sc-for list="{{ roleDetail.criteria }}" as="item" hint-placeholder-count="5">
+            <li style="display:grid;grid-template-columns:20px 1fr;column-gap:10px;padding:8px 0;border-bottom:1px solid #DCD9D2">
+              <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums">{{ item.n }}</span>
+              <div style="min-width:0">
+                <p style="margin:0;max-width:70ch;font-size:16px;line-height:1.4;color:#12171F;text-wrap:pretty">{{ item.text }}</p>
+                <p style="margin:2px 0 0;font-size:14px;color:{{ item.atColor }}">{{ item.at }}</p>
+              </div>
+            </li>
+          </sc-for>
+        </ol>
+
+        <p style="margin:16px 0 0;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#636B78">Stages</p>
+        <ul style="list-style:none;margin:6px 0 0;padding:0;border-top:1px solid #DCD9D2">
+          <sc-for list="{{ roleDetail.stages }}" as="stage" hint-placeholder-count="6">
+            <li style="display:grid;grid-template-columns:minmax(0,1fr) 74px;column-gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid #DCD9D2">
+              <span style="font-size:16px;color:#12171F">{{ stage.label }}</span>
+              <span style="font-size:14px;color:#636B78;font-variant-numeric:tabular-nums;text-align:right">{{ stage.count }}</span>
+            </li>
+          </sc-for>
+        </ul>
+        <button type="button" onClick="{{ roleDetail.onSeeCandidacies }}" style="margin-top:14px;border:1px solid #948D7E;border-radius:3px;background:transparent;color:#12171F;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:5px 10px;cursor:pointer" style-hover="background:#EDEBE6">See candidacies</button>
+      </div>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Compact&quot;,&quot;Comfortable&quot;],&quot;default&quot;:&quot;Compact&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Display&quot;},&quot;aboutDefaultOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Display&quot;}}">
+const INK = "#12171F", SEC = "#39424F", MUT = "#636B78", FAINT = "#636B78", RULE = "#DCD9D2";
+const EV = "#0E6C89", OP = "#8B5A11", CONTROL = "#948D7E";
+
+const CRIT_FC = [
+  { id: "crt_fc_1", text: "Has closed a month-end in a private-equity-backed business", cell: "PE month-end", at: "Screening call" },
+  { id: "crt_fc_2", text: "Led an ERP migration, not only participated in one", cell: "Led an ERP migration", at: "Competency call" },
+  { id: "crt_fc_3", text: "Has managed a team of three or more", cell: "Team of three or more", at: "Screening call" },
+  { id: "crt_fc_4", text: "Manufacturing or industrial sector experience", cell: "Manufacturing or industrial", at: "Sourced" },
+  { id: "crt_fc_5", text: "Qualified ACA, ACCA or CIMA", cell: "Qualified accountant", at: "Sourced" },
+];
+const CRIT_FBP = [
+  { id: "crt_fbp_1", text: "Has business-partnered a commercial or operations director", cell: "Business partnering", at: "Screening call" },
+  { id: "crt_fbp_2", text: "Built a rolling forecast from site-level data", cell: "Rolling forecast", at: "Screening call" },
+  { id: "crt_fbp_3", text: "Qualified or finalist ACA, ACCA or CIMA", cell: "Qualified or finalist", at: "Sourced" },
+];
+const CRIT_MA = [
+  { id: "crt_ma_1", text: "Has prepared a set of statutory accounts to audit", cell: "Statutory accounts", at: "Screening call" },
+  { id: "crt_ma_2", text: "Food, drink or FMCG manufacturing experience", cell: "Food or FMCG", at: "Sourced" },
+];
+
+const ROLES = {
+  rol_financial_controller: { title: "Financial Controller", client: "Bramhall Precision Group", criteria: CRIT_FC, brief: "Version 2 · 2 March 2026",
+    state: "open", stages: ["Sourced", "Contacted", "Screening call", "Competency call", "Submitted", "Client interview"] },
+  rol_finance_business_partner: { title: "Finance Business Partner", client: "Calder Vale Foods", criteria: CRIT_FBP, brief: "Version 1 · 6 October 2025",
+    state: "closed", stages: ["Sourced", "Screening call", "Submitted", "Client interview"] },
+  rol_management_accountant: { title: "Management Accountant", client: "Calder Vale Foods", criteria: CRIT_MA, brief: "Version 1 · 28 July 2026",
+    state: "draft", stages: ["Sourced", "Screening call", "Submitted"],
+    flag: "Cannot open", flagDetail: "Two criteria on the Brief and three are required. Until the third arrives the role takes no candidate and runs no search." },
+};
+
+/* Which criteria each stage is responsible for. A candidacy cannot advance until every
+ * one of them carries a finding — that is the only thing "attention" means here. */
+const STAGE_CRIT = {
+  "Sourced": { rol_financial_controller: ["crt_fc_4", "crt_fc_5"], rol_finance_business_partner: ["crt_fbp_3"] },
+  "Contacted": {}, "Submitted": {}, "Client interview": {},
+  "Screening call": { rol_financial_controller: ["crt_fc_1", "crt_fc_3"], rol_finance_business_partner: ["crt_fbp_1", "crt_fbp_2"] },
+  "Competency call": { rol_financial_controller: ["crt_fc_2"] },
+};
+const TERMINAL = ["Placed", "Rejected", "Excluded", "Closed, no response"];
+const STAGE_ORDER = ["Sourced", "Contacted", "Screening call", "Competency call", "Submitted", "Client interview", "Placed", "Rejected", "Excluded", "Closed, no response"];
+
+const C = [
+  { id: "cnd_marchetti", name: "Aileen Marchetti", family: "Marchetti", employer: "Denholm Castings Ltd", location: "Rotherham",
+    headline: "Financial Controller, Denholm Castings", contact: "a.marchetti@example.com · 07700 900118",
+    role: "rol_financial_controller", stage: "Screening call", channel: "Company sites", added: "20 April 2026", closeAt: "2026-09-18", closedOn: null,
+    f: { crt_fc_4: ["e", "Denholm is an aluminium and zinc die-casting business supplying the automotive and domestic appliance markets from a single site in Rotherham.", "aileen-marchetti-cv.pdf · 20 Apr 2026"],
+         crt_fc_5: ["e", "CIMA, qualified 2019.", "aileen-marchetti-cv.pdf · 20 Apr 2026"] } },
+  { id: "cnd_nandakumar", name: "Priya Nandakumar", family: "Nandakumar", employer: "Kestrel Industrial Group", location: "Sheffield",
+    headline: "Head of Finance, Kestrel Industrial Group", contact: "No email or phone on the record",
+    role: "rol_financial_controller", stage: "Sourced", channel: "Company sites", added: "14 March 2026", closeAt: "2026-08-27", closedOn: null, f: {} },
+  { id: "cnd_oyelaran", name: "Daniel Oyelaran", family: "Oyelaran", employer: "Vantage Fabrications Ltd", location: "Barnsley",
+    headline: "Finance Manager, Vantage Fabrications", contact: "0114 496 0182",
+    role: "rol_financial_controller", stage: "Contacted", channel: "Agency network", added: "14 March 2026", closeAt: "2026-09-04", closedOn: null,
+    f: { crt_fc_4: ["e", "costing and the annual audit file at our Barnsley works", "vantagefabrications.example · read 30 Sep 2025"], crt_fc_5: ["f"] } },
+  { id: "cnd_ibbotson", name: "Frances Ibbotson", family: "Ibbotson", employer: "Northgate Plastics Holdings Ltd", location: "Harrogate",
+    headline: "Group Financial Controller, Northgate Plastics", contact: "f.ibbotson@example.com · 07700 900431",
+    role: "rol_financial_controller", stage: "Competency call", channel: "Inbound apply", added: "2 April 2026", closeAt: "2026-09-25", closedOn: null,
+    signals: ["The document properties of frances-ibbotson-cv.pdf name the author as M. Ferriby. The candidate is Frances Ibbotson."],
+    f: { crt_fc_1: ["e", "turnover £62m, majority owned by Slaithwaite Equity Partners since the 2018 buy-out. I run the group close on a five-day timetable and present the consolidated result to the investor board each month.", "frances-ibbotson-cv.pdf · 9 Apr 2026"],
+         crt_fc_2: ["f"],
+         crt_fc_3: ["e", "My team is five: a financial accountant, two management accountants and two transactional staff.", "frances-ibbotson-cv.pdf · 9 Apr 2026"],
+         crt_fc_4: ["e", "Northgate is an injection moulding group of three sites in Yorkshire and the East Midlands", "frances-ibbotson-cv.pdf · 3 Apr 2026"],
+         crt_fc_5: ["e", "CIMA, qualified 2017.", "frances-ibbotson-cv.pdf · 3 Apr 2026"] } },
+  { id: "cnd_reith", name: "Callum Reith", family: "Reith", employer: "Selby Aggregates Ltd", location: "Doncaster",
+    headline: "Financial Controller, Selby Aggregates", contact: "c.reith@example.com · 07700 900276",
+    role: "rol_financial_controller", stage: "Rejected", channel: "Inbound apply", added: "11 April 2026", closeAt: "2026-07-10", closedOn: "19 May 2026",
+    f: { crt_fc_1: ["f"], crt_fc_2: ["f"], crt_fc_3: ["f"],
+         crt_fc_4: ["e", "Selby Aggregates is a family-owned quarrying and ready-mix concrete business", "callum-reith-cv.pdf · 13 Apr 2026"],
+         crt_fc_5: ["e", "ACCA, qualified 2021.", "callum-reith-cv.pdf · 13 Apr 2026"] } },
+  { id: "cnd_shanbhag", name: "Meera Shanbhag", family: "Shanbhag", employer: "Ravensworth Tooling Ltd", location: "Leeds",
+    headline: "Finance Director, Ravensworth Tooling", contact: "No email or phone on the record",
+    role: "rol_financial_controller", stage: "Excluded", channel: "Trade press", added: "14 March 2026", closeAt: "2026-06-12", closedOn: "8 April 2026",
+    f: { crt_fc_1: ["f"],
+         crt_fc_3: ["e", "leads a finance and IT team of six", "yorkshiremanufacturingreview.example · read 14 Mar 2026"],
+         crt_fc_4: ["e", "Ravensworth Tooling has completed a £4m reinvestment in its Leeds cutting-tool plant.", "yorkshiremanufacturingreview.example · read 14 Mar 2026"],
+         crt_fc_5: ["e", "Ms Shanbhag, who qualified with ACCA", "yorkshiremanufacturingreview.example · read 14 Mar 2026"] } },
+  { id: "cnd_trelawny", name: "Owen Trelawny", family: "Trelawny", employer: "Hartwell Precision Components Ltd", location: "Sheffield",
+    headline: "Financial Controller, Hartwell Precision Components", contact: "o.trelawny@example.com · 07700 900604",
+    role: "rol_financial_controller", stage: "Submitted", channel: "Company sites", added: "14 March 2026", closeAt: "2026-10-15", closedOn: null,
+    f: { crt_fc_1: ["e", "I have closed every month-end since the acquisition to the reporting timetable Ardenne set", "owen-trelawny-cv.pdf · 25 Apr 2026"],
+         crt_fc_2: ["e", "I led the migration from Sage 200 to Microsoft Dynamics 365 Business Central across two sites", "owen-trelawny-cv.pdf · 8 May 2026"],
+         crt_fc_3: ["e", "I manage a team of four: two management accountants, an assistant accountant and a purchase ledger clerk.", "owen-trelawny-cv.pdf · 25 Apr 2026"],
+         crt_fc_4: ["e", "Owen joined Hartwell in 2021 following the acquisition by Ardenne Capital", "hartwellprecision.example · read 14 Mar 2026"],
+         crt_fc_5: ["e", "ACA, qualified 2016, Institute of Chartered Accountants in England and Wales.", "owen-trelawny-cv.pdf · 25 Apr 2026"] } },
+  { id: "cnd_lloyd_price", name: "Bethan Lloyd-Price", family: "Lloyd-Price", employer: "Cawthorne Foods Ltd", location: "Wakefield",
+    headline: "Management Accountant, Cawthorne Foods", contact: "0113 496 0550",
+    role: "rol_financial_controller", stage: "Sourced", channel: "Company sites", added: "14 March 2026", closeAt: "2026-08-08", closedOn: null, f: {} },
+  { id: "cnd_petrescu", name: "Ivan Petrescu", family: "Petrescu", employer: "Stelmark Engineering Ltd", location: "Chesterfield",
+    headline: "Finance Manager, Stelmark Engineering", contact: "0113 496 0550",
+    role: "rol_financial_controller", stage: "Screening call", channel: "Company sites", added: "14 March 2026", closeAt: "2026-09-11", closedOn: null,
+    signals: ["Two stated roles overlap by seven months. Stelmark Engineering is stated as from August 2019. Marrick Alloys is stated as to March 2020.",
+              "The telephone number recorded for this person, 0113 496 0550, is also recorded for Bethan Lloyd-Price. Both were read from a company page on 14 March 2026."],
+    f: { crt_fc_1: ["f"],
+         crt_fc_3: ["e", "manages a team of three in the finance office", "stelmarkengineering.example · read 14 Mar 2026"],
+         crt_fc_4: ["e", "Stelmark is a subcontract engineering business supplying the rail and off-highway sectors from a single site in Chesterfield.", "stelmarkengineering.example · read 14 Mar 2026"],
+         crt_fc_5: ["f"] } },
+  { id: "cnd_rahman", name: "Sadia Rahman", family: "Rahman", employer: "Brindley Composites Ltd", location: "Huddersfield",
+    headline: "Financial Controller, Brindley Composites", contact: "No email or phone on the record",
+    role: "rol_financial_controller", stage: "Sourced", channel: "Trade press", added: "14 March 2026", closeAt: "2026-09-30", closedOn: null, f: {} },
+  { id: "cnd_oyelaran_fbp", name: "Daniel Oyelaran", family: "Oyelaran", employer: "Vantage Fabrications Ltd", location: "Barnsley",
+    headline: "Finance Manager, Vantage Fabrications", contact: "0114 496 0182",
+    role: "rol_finance_business_partner", stage: "Closed, no response", channel: "Company sites", added: "4 November 2025", closeAt: "2026-02-02", closedOn: "2 February 2026", f: {} },
+  { id: "cnd_amankwah_fbp", name: "George Amankwah", family: "Amankwah", employer: "Calder Vale Foods Ltd", location: "Wakefield",
+    headline: "Finance Business Partner, Calder Vale Foods", contact: "No email or phone on the record",
+    role: "rol_finance_business_partner", stage: "Placed", channel: "Referral", added: "15 September 2025", closeAt: "2026-01-14", closedOn: "11 February 2026",
+    checkpoint: { flag: "Checkpoint 66 days past due", detail: "Day 90 was due 31 May 2026 and nobody has asked. The fee is earned at the end of probation on 2 September 2026, not on the start date." },
+    f: { crt_fbp_1: ["e", "George business-partners the milling and packing operations", "thornburymills.example · read 15 Sep 2025"],
+         crt_fbp_2: ["e", "builds the weekly rolling forecast", "thornburymills.example · read 15 Sep 2025"],
+         crt_fbp_3: ["e", "He is a CIMA finalist.", "thornburymills.example · read 15 Sep 2025"] } },
+];
+
+const SIGHTINGS = [
+  { key: "sig_open_vaughan", name: "Rhodri Vaughan", headline: "Head of Finance, Halstead Vale Engineering", source: "halsteadvale.example · 2 Jun 2026" },
+  { key: "sig_open_ashworth", name: "Nia Ashworth", headline: "Financial Controller, Pilkington Rowe Composites", source: "pilkingtonrowe.example · 2 Jun 2026" },
+  { key: "sig_open_bak", name: "Stefan Bąk", headline: "Financial Controller, Cranmore Packaging", source: "cranmorepackaging.example · 2 Jun 2026" },
+];
+
+const NOW = Date.parse("2026-08-05T09:00:00.000Z");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function days(at) { return Math.round((Date.parse(at + "T09:00:00.000Z") - NOW) / 86400000); }
+function shortDate(at) { const d = new Date(at + "T09:00:00.000Z"); return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+
+const WORD = { e: "evidenced", f: "not found", n: "no entry" };
+function mark(state, size) {
+  const box = "width:" + size + "px;height:" + size + "px;flex:none;";
+  if (state === "e") return box + "background:" + EV;
+  if (state === "f") return box + "border:2px solid " + OP;
+  return box + "border:1px dotted " + MUT;
+}
+function stateMark(roleState) {
+  if (roleState === "open") return "width:12px;height:12px;flex:none;background:" + INK;
+  if (roleState === "draft") return "width:12px;height:12px;flex:none;border:1px dotted " + INK;
+  return "width:12px;height:12px;flex:none;border:2px solid " + INK;
+}
+const MONO = "font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;";
+
+function cellsOf(c) {
+  return ROLES[c.role].criteria.map((crit) => {
+    const rec = c.f[crit.id];
+    const state = rec ? rec[0] : "n";
+    return { crit, state, quote: rec && rec[1] ? rec[1] : null, source: rec && rec[2] ? rec[2] : null };
+  });
+}
+
+/* The single definition of "needs attention". Everything illuminated anywhere in the
+ * app comes from here, and nothing is illuminated that is not in it. */
+function flagOf(c) {
+  if (c.checkpoint) return { flag: c.checkpoint.flag, detail: c.checkpoint.detail };
+  if (c.closedOn) return null;
+  const sig = c.signals ? c.signals.length : 0;
+  const owed = (STAGE_CRIT[c.stage] && STAGE_CRIT[c.stage][c.role]) || [];
+  const missing = owed.filter((id) => !c.f[id]).length;
+  const d = days(c.closeAt);
+  const parts = [];
+  if (d <= 7 && !TERMINAL.includes(c.stage)) parts.push("Closes in " + d + " days");
+  if (missing > 0) parts.push("Scorecard incomplete");
+  if (sig > 0) parts.push(sig === 1 ? "1 signal unresolved" : sig + " signals unresolved");
+  if (parts.length === 0) return null;
+  const detail = [];
+  if (d <= 7 && !TERMINAL.includes(c.stage)) detail.push("Auto-closes " + shortDate(c.closeAt) + ". Nothing in this interface can move that date.");
+  if (missing > 0) detail.push(missing + " of the " + owed.length + " criteria " + c.stage + " is responsible for carry no finding, so this candidacy cannot advance.");
+  if (sig > 0) detail.push(c.signals.join(" "));
+  return { flag: parts.join(" · "), detail: detail.join(" ") };
+}
+
+class Component extends DCLogic {
+  state = { view: "The Desk", selected: null, selectedRole: null, aboutOpen: false, query: "", flaggedOnly: false,
+    roleFilter: "all", stageFilter: "all", channelFilter: "all", stateFilter: "all", sort: "family" };
+
+  componentDidMount() {
+    this._esc = (e) => { if (e.key === "Escape") this.setState({ selected: null, selectedRole: null }); };
+    window.addEventListener("keydown", this._esc);
+    if (this.props.aboutDefaultOpen) this.setState({ aboutOpen: true });
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this._esc); }
+  set(key) { return (e) => this.setState({ [key]: e.target.value }); }
+  go(view, patch) { this.setState(Object.assign({ view, selected: null, selectedRole: null }, patch || {})); }
+
+  renderVals() {
+    const s = this.state;
+    const dense = (this.props.density ?? "Compact") === "Compact";
+    const padY = dense ? 7 : 12;
+    const q = s.query.trim().toLowerCase();
+    const flags = {};
+    C.forEach((c) => { flags[c.id] = flagOf(c); });
+    const flaggedIds = C.filter((c) => flags[c.id]).map((c) => c.id);
+
+    const blocked = C.filter((c) => {
+      if (c.closedOn) return false;
+      const owed = (STAGE_CRIT[c.stage] && STAGE_CRIT[c.stage][c.role]) || [];
+      return owed.some((id) => !c.f[id]);
+    });
+
+    const attention = [];
+    const push = (kind, subject, fact, go, act) => attention.push({ key: kind + subject, kind, subject, fact, go: act || "Open", onGo: go });
+    push("Probation", "George Amankwah · Calder Vale Foods", "Day 90 was due 31 May. Nobody has asked.",
+      () => this.go("Candidacies", { roleFilter: "all", stateFilter: "all", flaggedOnly: false, selected: "cnd_amankwah_fbp" }), "Record it");
+    push("Auto-closure", "Bethan Lloyd-Price", "Closes in 3 days. No finding ever recorded.",
+      () => this.go("Candidacies", { flaggedOnly: false, selected: "cnd_lloyd_price" }), "Open");
+    push("Signals", "Ivan Petrescu", "Timeline overlap, and a shared telephone number.",
+      () => this.go("Candidacies", { flaggedOnly: false, selected: "cnd_petrescu" }), "Resolve");
+    push("Signals", "Frances Ibbotson", "CV document properties name a different author.",
+      () => this.go("Candidacies", { flaggedOnly: false, selected: "cnd_ibbotson" }), "Resolve");
+    push("Scorecards", blocked.length + " candidacies cannot advance", "Their current stage's criteria carry no finding.",
+      () => this.go("Candidacies", { flaggedOnly: true, stageFilter: "all", stateFilter: "open" }), "Review");
+    push("Role", "Management Accountant · Calder Vale Foods", "Two criteria. Three are required to open.",
+      () => this.go("Roles", { selectedRole: "rol_management_accountant" }), "Open Brief");
+    push("Sourcing", "3 sightings read, and not yet anybody", "From the June run.",
+      () => this.go("Sourcing runs"), "Triage");
+
+    const navCounts = { "The Desk": attention.length, "Roles": 1, "Candidacies": flaggedIds.length, "Sourcing runs": 3, "Settings": 0 };
+    const navItems = ["The Desk", "Roles", "Candidacies", "Sourcing runs", "Settings"].map((label) => {
+      const on = s.view === label;
+      const n = navCounts[label];
+      return {
+        key: label, label, current: on ? "page" : undefined,
+        style: "display:grid;grid-template-columns:3px 1fr auto;align-items:center;gap:9px;padding:5px 8px 5px 0;font-family:inherit;font-size:16px;line-height:1.4;font-weight:" + (on ? "500" : "400") + ";text-align:left;border:0;border-radius:3px;cursor:pointer;color:" + (on ? INK : SEC) + ";background:" + (on ? "#F6F5F2" : "transparent"),
+        markStyle: "height:16px;background:" + (on ? INK : "transparent"),
+        badge: n > 0 ? String(n) : "",
+        badgeStyle: n > 0 ? "font-family:'IBM Plex Mono',monospace;font-size:12px;color:" + INK + ";font-variant-numeric:tabular-nums" : "display:none",
+        onClick: () => this.go(label),
+      };
+    });
+
+    let list = C.filter((c) => {
+      if (s.roleFilter !== "all" && c.role !== s.roleFilter) return false;
+      if (s.stageFilter !== "all" && c.stage !== s.stageFilter) return false;
+      if (s.channelFilter !== "all" && c.channel !== s.channelFilter) return false;
+      if (s.stateFilter === "open" && c.closedOn) return false;
+      if (s.stateFilter === "closed" && !c.closedOn) return false;
+      if (s.flaggedOnly && !flags[c.id]) return false;
+      if (q && !(c.name + " " + c.employer).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    list = list.slice().sort((a, b) => {
+      if (s.sort === "stage") return STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.family.localeCompare(b.family);
+      if (s.sort === "closing") return days(a.closeAt) - days(b.closeAt);
+      if (s.sort === "added") return Date.parse(a.added) - Date.parse(b.added) || a.family.localeCompare(b.family);
+      return a.family.localeCompare(b.family) || ROLES[a.role].title.localeCompare(ROLES[b.role].title);
+    });
+
+    const rows = list.map((c) => {
+      const cells = cellsOf(c);
+      const ev = cells.filter((x) => x.state === "e").length;
+      const isSel = s.selected === c.id;
+      const fl = flags[c.id];
+      return {
+        id: c.id, isSelected: isSel,
+        style: "display:grid;grid-template-columns:3px minmax(210px,1.25fr) 152px 232px 128px 330px;column-gap:16px;align-items:center;min-width:1141px;padding:" + padY + "px 0;border-bottom:1px solid " + RULE + ";cursor:pointer;outline-offset:-2px;" + (isSel ? "background:#EDEBE6;" : ""),
+        markerStyle: "display:block;width:3px;height:" + (dense ? 19 : 24) + "px;background:" + (isSel ? INK : "transparent"),
+        nameStyle: "font-size:16px;line-height:1.35;white-space:nowrap;color:" + (fl ? INK : SEC),
+        name: c.name, employer: c.employer, role: ROLES[c.role].title, stage: c.stage, channel: c.channel,
+        cells: cells.map((x, i) => ({ key: c.id + "-" + i, title: x.crit.cell + " — " + WORD[x.state], style: mark(x.state, 13) })),
+        cellsLabel: "Criteria for " + c.name + ", in the order of The Brief: " + cells.map((x, i) => (i + 1) + ". " + x.crit.cell + " " + WORD[x.state]).join(", "),
+        evidencedLine: ev + " of " + cells.length,
+        flag: fl ? fl.flag : (c.closedOn ? "Closed " + c.closedOn : shortDate(c.closeAt)),
+        flagStyle: fl ? MONO + "color:" + INK + ";line-height:1.4"
+                      : "font-size:14px;color:" + FAINT + ";font-variant-numeric:tabular-nums;white-space:nowrap",
+        onSelect: () => this.setState({ selected: isSel ? null : c.id }),
+        onKey: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.setState({ selected: isSel ? null : c.id }); } },
+      };
+    });
+
+    const roleIds = ["rol_financial_controller", "rol_finance_business_partner", "rol_management_accountant"];
+    const roles = roleIds.map((id) => {
+      const r = ROLES[id];
+      const held = C.filter((c) => c.role === id);
+      const counts = r.stages.map((label) => ({ label, count: held.filter((c) => c.stage === label).length })).filter((x) => x.count > 0);
+      const isSel = s.selectedRole === id;
+      const flagged = held.filter((c) => flags[c.id]).length + (r.flag ? 1 : 0);
+      return {
+        key: id, title: r.title, client: r.client, stateWord: r.state === "open" ? "Open" : r.state === "draft" ? "Draft" : "Closed",
+        markStyle: stateMark(r.state), briefLine: r.brief.split(" · ")[0] + " · " + r.criteria.length + " criteria",
+        count: held.length > 0 ? String(held.length) : "—",
+        funnel: counts.length > 0 ? counts.map((x) => x.label + " " + x.count).join("  ·  ") : "No candidacies",
+        flag: flagged > 0 ? (r.flag ? r.flag : String(flagged)) : "",
+        flagStyle: flagged > 0 ? MONO + "color:" + INK + ";white-space:nowrap;text-align:right" : "display:none",
+        rowStyle: "display:grid;grid-template-columns:3px minmax(0,1.2fr) minmax(0,1fr) 140px 170px 108px 92px;column-gap:16px;align-items:center;min-width:940px;padding:" + (padY + 2) + "px 0;border-bottom:1px solid " + RULE + ";cursor:pointer;outline-offset:-2px;" + (isSel ? "background:#EDEBE6;" : ""),
+        markerStyle: "display:block;width:3px;height:20px;background:" + (isSel ? INK : "transparent"),
+        onOpen: () => this.go("Roles", { selectedRole: id }),
+        onSelect: () => this.setState({ selectedRole: isSel ? null : id }),
+        onKey: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.setState({ selectedRole: isSel ? null : id }); } },
+      };
+    });
+
+    const sel = C.find((c) => c.id === s.selected) || null;
+    let detail = {};
+    if (sel) {
+      const cells = cellsOf(sel);
+      const fl = flags[sel.id];
+      const d = days(sel.closeAt);
+      detail = {
+        eyebrow: ROLES[sel.role].client + " · " + ROLES[sel.role].title,
+        name: sel.name, headline: sel.headline, stage: sel.stage,
+        stageMarkStyle: mark(sel.closedOn ? "f" : "e", 12),
+        closure: sel.closedOn ? "Closed " + sel.closedOn : "Auto-closes " + shortDate(sel.closeAt) + " · " + d + " days",
+        employer: sel.employer, location: sel.location, contact: sel.contact, channel: sel.channel,
+        hasFlag: !!fl, flag: fl ? fl.flag : "", flagDetail: fl ? fl.detail : "",
+        briefLine: "The Brief · " + ROLES[sel.role].brief,
+        criteria: cells.map((x, i) => ({
+          key: sel.id + "-c" + i, text: (i + 1) + ". " + x.crit.text,
+          markStyle: mark(x.state, 13) + ";margin-top:5px",
+          word: WORD[x.state], wordColor: x.state === "f" ? OP : MUT,
+          hasQuote: !!x.quote, noQuote: !x.quote,
+          quote: x.quote ? "“" + x.quote + "”" : "", source: x.source || "",
+        })),
+      };
+    }
+
+    const selRole = s.selectedRole ? ROLES[s.selectedRole] : null;
+    let roleDetail = {};
+    if (selRole) {
+      const held = C.filter((c) => c.role === s.selectedRole);
+      roleDetail = {
+        title: selRole.title, client: selRole.client, briefLine: "The Brief · " + selRole.brief,
+        hasFlag: !!selRole.flag, flag: selRole.flag || "", flagDetail: selRole.flagDetail || "",
+        criteria: selRole.criteria.map((crit, i) => ({
+          key: crit.id, n: String(i + 1), text: crit.text,
+          at: selRole.state === "draft" ? "Assigned to no stage" : "Evidenced at " + crit.at,
+          atColor: selRole.state === "draft" ? INK : MUT,
+        })),
+        stages: selRole.stages.map((label) => ({ key: label, label, count: String(held.filter((c) => c.stage === label).length) })),
+        onSeeCandidacies: () => this.go("Candidacies", { roleFilter: s.selectedRole, stateFilter: "all", flaggedOnly: false }),
+      };
+    }
+
+    const roleName = s.roleFilter === "all" ? "Candidacies" : ROLES[s.roleFilter].title;
+    return {
+      navItems, attention, rows, roles, detail, roleDetail, sightings: SIGHTINGS,
+      hasCandidate: !!sel, hasRole: !!selRole,
+      isDesk: s.view === "The Desk", isRoles: s.view === "Roles", isCandidacies: s.view === "Candidacies",
+      isSourcing: s.view === "Sourcing runs", isSettings: s.view === "Settings",
+      needsLabel: attention.length > 0 ? "Needs you · " + attention.length : "Nothing needs you today",
+      heading: roleName,
+      countLine: rows.length === C.length ? rows.length + " records" : rows.length + " of " + C.length + " records",
+      aboutOpen: s.aboutOpen, aboutLabel: s.aboutOpen ? "Less" : "About",
+      aboutBtnStyle: "margin-left:auto;border:1px solid " + CONTROL + ";border-radius:3px;background:transparent;cursor:pointer;padding:3px 8px;" + MONO + "color:" + FAINT,
+      flaggedOnly: s.flaggedOnly,
+      flaggedLabel: s.flaggedOnly ? "Needs attention · on" : "Needs attention",
+      flaggedBtnStyle: "border:1px solid " + (s.flaggedOnly ? INK : CONTROL) + ";border-radius:3px;background:transparent;cursor:pointer;padding:4px 8px;" + MONO + "color:" + (s.flaggedOnly ? INK : FAINT),
+      query: s.query, roleFilter: s.roleFilter, stageFilter: s.stageFilter,
+      channelFilter: s.channelFilter, stateFilter: s.stateFilter, sort: s.sort,
+      onQuery: this.set("query"), onRole: this.set("roleFilter"), onStage: this.set("stageFilter"),
+      onChannel: this.set("channelFilter"), onState: this.set("stateFilter"), onSort: this.set("sort"),
+      onToggleAbout: () => this.setState({ aboutOpen: !s.aboutOpen }),
+      onToggleFlagged: () => this.setState({ flaggedOnly: !s.flaggedOnly }),
+      onClose: () => this.setState({ selected: null, selectedRole: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

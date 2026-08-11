@@ -39,6 +39,7 @@
   --color-ink-inverse: var(--rc-ink-inverse);
   --color-paper: var(--rc-paper);
   --color-paper-sunk: var(--rc-paper-sunk);
+  --color-paper-sunk-hover: var(--rc-paper-sunk-hover);
   --color-paper-raised: var(--rc-paper-raised);
   --color-rule: var(--rc-rule);
   --color-rule-strong: var(--rc-rule-strong);
@@ -96,6 +97,29 @@
     line-height: 1.5;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+
+  /* The cockpit's only two animations: the drawer enters over 160ms, the About
+   * panel fades over 140ms. Nothing else animates — a table that animates on
+   * hover feels slow at twelve rows. */
+  @keyframes rc-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes rc-drawer-in {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   /* Honeypot container: off-screen, deliberately not display:none — a field that

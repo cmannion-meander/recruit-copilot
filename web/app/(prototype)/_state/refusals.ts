@@ -22,15 +22,19 @@ import type { PrototypeState } from "../_fixtures";
 import type { CandidacyId, ReasonCode, RoleId } from "../_fixtures/types";
 import {
   candidacyById,
-  criteriaAtStage,
   criteriaFor,
   findingsFor,
   latestBriefVersion,
+  MINIMUM_CRITERIA,
   messageSentAtStage,
   nextStage,
+  owedAtStage,
+  SIGNAL_LABEL,
   stageOf,
   stagesFor,
 } from "./selectors";
+
+export { SIGNAL_LABEL };
 
 export type RefusalItem = { label: string; detail?: string };
 
@@ -46,8 +50,6 @@ export type Refusal = {
   /** Which invariant this is, so the prototype can be read against the document. */
   invariant: number;
 };
-
-const MINIMUM_CRITERIA = 3;
 
 /* ── Invariant 1 · rubric before pipeline ────────────────────────────────────────
  * Two conditions, in order. Three criteria is the count The Brief has always had to
@@ -185,10 +187,7 @@ export function refuseAdvance(state: PrototypeState, candidacyId: CandidacyId): 
   const onward = nextStage(state, candidacy);
   if (!onward) return null;
 
-  const recorded = findingsFor(state, candidacy.id);
-  const owed = criteriaAtStage(state, candidacy, stage.id).filter(
-    (criterion) => !recorded.some((finding) => finding.criterion_id === criterion.id),
-  );
+  const owed = owedAtStage(state, candidacy, stage.id);
 
   if (owed.length > 0) {
     const total = criteriaFor(state, candidacy.brief_version_id).length;
@@ -349,9 +348,38 @@ export function refuseCheckpoint(note: string): Refusal | null {
   };
 }
 
-export const SIGNAL_LABEL: Record<string, string> = {
-  timeline_overlap: "Timeline overlap",
-  contact_collision: "Contact match in this organisation",
-  document_author: "Document properties name another author",
-  duplicate_candidacy: "Duplicate against a prior candidacy",
-};
+/* ── Invariant 6 · the deadline moves only by telling the candidate ──────────────
+ * There is no date picker and no off switch. The one way to move auto_close_at
+ * without a stage transition is to send the candidate a message, and the text of
+ * that message is the reason on the record — one text, one audience, the same
+ * arrangement invariant 6 already uses for rejections. See ADR 0012.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+export function refuseExtension(
+  state: PrototypeState,
+  candidacyId: CandidacyId,
+  messageText: string,
+): Refusal | null {
+  const candidacy = candidacyById(state, candidacyId);
+  if (!candidacy) return null;
+
+  if (candidacy.closed_at !== null) {
+    return {
+      requirement: "A closed candidacy does not extend.",
+      reason: "This record is closed.",
+      action: "Open a new candidacy if the person is back in play.",
+      invariant: 6,
+    };
+  }
+
+  if (messageText.trim().length === 0) {
+    return {
+      requirement: "Extending the deadline sends the candidate a message.",
+      reason: "The message is empty.",
+      action:
+        "Write where this stands and why it is taking longer. They read exactly what you write.",
+      invariant: 6,
+    };
+  }
+
+  return null;
+}

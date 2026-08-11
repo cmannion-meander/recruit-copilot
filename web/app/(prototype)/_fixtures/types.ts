@@ -274,9 +274,12 @@ export type Candidacy = {
   stage_id: StageId;
   channel_id: ChannelId;
   created_at: Timestamp;
-  /* NOT NULL, defaulted on insert, and there is no control anywhere in this prototype
-   * to extend or disable it — invariant 6. A deadline you can quietly turn off is not
-   * a promise to a candidate. */
+  /* NOT NULL, defaulted on insert, and never disabled. The date moves only in the
+   * same act that tells the candidate something: a stage transition resets it (the
+   * transition already requires the stage message), and a manual extension sends the
+   * candidate a message whose text is the reason on the record — invariant 6, ADR
+   * 0012. There is no date picker and no off switch. A deadline you can quietly
+   * turn off is not a promise to a candidate. */
   auto_close_at: Timestamp;
   closed_at: Timestamp | null;
 };
@@ -461,6 +464,7 @@ export type DecisionEventType =
   | "excluded"
   | "submission_created"
   | "message_sent"
+  | "deadline_extended"
   | "checkpoint_recorded";
 
 /** Append-only. Nothing in the reducer removes or rewrites one. */
@@ -519,7 +523,13 @@ export type SubmissionRecord = {
  * person who hears nothing for six weeks and then receives an automated closure has
  * still been ghosted, politely. The stage messages are what make the deadline a
  * promise rather than a backstop. */
-export type CandidateMessageKind = "stage" | "rejection" | "auto_closure" | "submission";
+export type CandidateMessageKind =
+  | "stage"
+  | "rejection"
+  | "auto_closure"
+  | "submission"
+  /** Sent when the auto-closure deadline is extended. The text is the reason. */
+  | "extension";
 
 export type CandidateMessage = {
   id: CandidateMessageId;

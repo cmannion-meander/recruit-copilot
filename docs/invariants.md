@@ -81,6 +81,12 @@ task closes anything past deadline. There is no setting to disable it. Every `Br
 carries a non-nullable `candidate_message`, and the stage transition validator raises if no
 `CandidateMessage` exists for the stage being left.
 
+The date is permitted to move, but only in the same act that tells the candidate something:
+a stage transition resets it (the transition already requires the stage message), and a
+manual extension adds a fixed thirty days and sends the candidate a message whose text is
+the reason on the record. No date picker, no cap, and nothing quiet — every extension is an
+append-only `DecisionEvent` and the count renders on the record. See ADR 0012.
+
 The second sentence is new and is the strongest opinion in the document, because it costs the
 recruiter something on every transition. It is here because a deadline alone does not deliver
 the promise: somebody who hears nothing for six weeks and then receives an automated closure

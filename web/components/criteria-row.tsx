@@ -39,12 +39,16 @@ export function CriteriaRow({
   cells,
   subject,
   size = "md",
+  count = "long",
   className,
 }: {
   cells: CriterionCell[];
   /** Whose row this is, for the accessible name. */
   subject: string;
   size?: "sm" | "md";
+  /** The count beside the cells. `short` is for a dense table column; it is still
+   *  rendered only beside the cells — there is no way to get the number alone. */
+  count?: "long" | "short";
   className?: string;
 }) {
   const evidenced = cells.filter((cell) => cell.state === "evidenced").length;
@@ -66,16 +70,36 @@ export function CriteriaRow({
           />
         ))}
       </ul>
-      <p className="text-14 tabular text-ink-secondary">
-        {evidenced} of {cells.length} evidenced
-        {noEntry > 0 ? (
-          <span className="text-ink-muted">
-            {" · "}
-            {noEntry} with no entry
-          </span>
-        ) : null}
-      </p>
+      {count === "short" ? (
+        <p className="text-14 tabular text-ink-muted">
+          {evidenced} of {cells.length}
+        </p>
+      ) : (
+        <p className="text-14 tabular text-ink-secondary">
+          {evidenced} of {cells.length} evidenced
+          {noEntry > 0 ? (
+            <span className="text-ink-muted">
+              {" · "}
+              {noEntry} with no entry
+            </span>
+          ) : null}
+        </p>
+      )}
     </div>
+  );
+}
+
+/** One cell, for a screen that lays out its own row (the drawer's Brief list). The
+ *  shape vocabulary stays in this file so it cannot fork. */
+export function CriterionCellMark({
+  state,
+  className,
+}: {
+  state: CriterionCellState;
+  className?: string;
+}) {
+  return (
+    <span aria-hidden="true" className={cn("size-4 shrink-0", CELL_SHAPE[state], className)} />
   );
 }
 

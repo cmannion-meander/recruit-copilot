@@ -8,7 +8,7 @@
  */
 
 import type { PrototypeState } from "../_fixtures";
-import { formatDateShort } from "../_fixtures/clock";
+import { daysFromNow, daysSince, formatDate, formatDateShort } from "../_fixtures/clock";
 import type {
   BriefStage,
   Candidacy,
@@ -469,4 +469,328 @@ export function sourceTextOf(state: PrototypeState, target: EvidenceTarget): str
     return documentById(state, target.document_id)?.parsed_text ?? "";
   }
   return sightingById(state, target.sighting_id)?.snapshot_excerpt ?? "";
+}
+
+// ── Attention ───────────────────────────────────────────────────────────────────
+
+/** An observation, in words. Never a severity, never the word fraud. */
+export const SIGNAL_LABEL: Record<string, string> = {
+  timeline_overlap: "Timeline overlap",
+  contact_collision: "Contact match in this organisation",
+  document_author: "Document properties name another author",
+  duplicate_candidacy: "Duplicate against a prior candidacy",
+};
+
+/** The Brief opens nothing below this. Shared with refusals.ts, defined once. */
+export const MINIMUM_CRITERIA = 3;
+
+export type Flag = { flag: string; detail: string };
+
+/** Criteria this stage is responsible for that carry no finding anywhere yet. The
+ *  same arithmetic refuseAdvance gates on, factored so it is written once. */
+export function owedAtStage(
+  state: PrototypeState,
+  candidacy: Candidacy,
+  stageId: string,
+): Criterion[] {
+  const recorded = findingsFor(state, candidacy.id);
+  return criteriaAtStage(state, candidacy, stageId).filter(
+    (criterion) => !recorded.some((finding) => finding.criterion_id === criterion.id),
+  );
+}
+
+/* ── The single definition of "needs attention" ──────────────────────────────────
+ * Everything illuminated anywhere in the cockpit comes from this predicate — the
+ * nav badges, the Desk list, the table's attention column, the drawer's flag
+ * block — and nothing is illuminated that is not in it. The order is deliberate:
+ * an outstanding checkpoint outranks everything because the fee is at stake, and a
+ * closed record can need nothing at all.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+export function needsAttention(state: PrototypeState, candidacy: Candidacy): Flag | null {
+  const placement = placementFor(state, candidacy.id);
+  if (placement) {
+    const overdue = checkpointsFor(state, placement.id).find(
+      (checkpoint) => checkpoint.recorded_at === null && daysFromNow(checkpoint.due_on) < 0,
+    );
+    if (overdue) {
+      return {
+        flag: `Checkpoint ${daysSince(overdue.due_on)} days past due`,
+        detail: `Day ${overdue.day} was due ${formatDate(overdue.due_on)} and nobody has asked. The fee is earned at the end of probation on ${formatDate(placement.probation_ends_on)}, not on the start date.`,
+      };
+    }
+  }
+
+  if (candidacy.closed_at !== null) return null;
+
+  const stage = stageOf(state, candidacy);
+  const terminal = stage === undefined || stage.terminal;
+  const parts: string[] = [];
+  const details: string[] = [];
+
+  const closesIn = daysFromNow(candidacy.auto_close_at);
+  if (closesIn <= 7 && !terminal) {
+    parts.push(`Closes in ${closesIn} days`);
+    details.push(
+      `Auto-closes ${formatDateShort(candidacy.auto_close_at)}. The date moves only with a message to the candidate — extending it sends one.`,
+    );
+  }
+
+  if (stage && !stage.terminal) {
+    const owed = owedAtStage(state, candidacy, stage.id);
+    if (owed.length > 0) {
+      const carried = criteriaAtStage(state, candidacy, stage.id).length;
+      parts.push("Scorecard incomplete");
+      details.push(
+        `${owed.length} of the ${carried} criteria ${stage.label} is responsible for carry no finding, so this candidacy cannot advance.`,
+      );
+    }
+  }
+
+  const signals = openSignalsFor(state, candidacy.id);
+  if (signals.length > 0) {
+    parts.push(
+      signals.length === 1 ? "1 signal unresolved" : `${signals.length} signals unresolved`,
+    );
+    details.push(signals.map((signal) => signal.detail).join(" "));
+  }
+
+  if (parts.length === 0) return null;
+  return { flag: parts.join(" · "), detail: details.join(" ") };
+}
+
+const COUNT_WORD = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+function countWord(n: number): string {
+  return COUNT_WORD[n] ?? String(n);
+}
+
+export type RoleFlag = Flag & {
+  /** The one-line form the Desk uses. */
+  fact: string;
+};
+
+/* The role-level flag: a draft role that cannot open, in the words of the refusal
+ * that would fire. Read-only — the refusal itself stays in refusals.ts. */
+export function roleAttention(state: PrototypeState, role: Role): RoleFlag | null {
+  if (role.state !== "draft") return null;
+  const version = latestBriefVersion(state, role);
+  if (!version) return null;
+
+  const criteria = criteriaFor(state, version.id);
+  if (criteria.length < MINIMUM_CRITERIA) {
+    return {
+      flag: "Cannot open",
+      fact: `${countWord(criteria.length)} criteria. Three are required to open.`,
+      detail: `${countWord(criteria.length)} criteria on The Brief and three are required. Until the third arrives the role takes no candidate and runs no search.`,
+    };
+  }
+
+  const covered = new Set(stagesFor(state, version.id).flatMap((stage) => stage.criterion_ids));
+  const uncovered = criteria.filter((criterion) => !covered.has(criterion.id));
+  if (uncovered.length > 0) {
+    const reason =
+      uncovered.length === 1
+        ? "One criterion is assigned to no stage."
+        : `${uncovered.length} criteria are assigned to no stage.`;
+    return {
+      flag: "Cannot open",
+      fact: reason,
+      detail: `${reason} A criterion assigned to no stage is a criterion nobody has agreed to look for. Assign each to the stage that will evidence it, or take it off The Brief.`,
+    };
+  }
+
+  return null;
+}
+
+/** Read, and not yet anybody: sightings that resolve to a person nobody has created. */
+export function unresolvedSightings(state: PrototypeState): Sighting[] {
+  return state.sightings.filter((sighting) => sighting.person_id === null && sighting.resolving);
+}
+
+/** How many times this candidacy's deadline has been extended, from the log. */
+export function extensionCount(state: PrototypeState, candidacyId: CandidacyId): number {
+  return state.decisionEvents.filter(
+    (event) => event.candidacy_id === candidacyId && event.type === "deadline_extended",
+  ).length;
+}
+
+/* Every distinct stage label, pipeline order first, terminal outcomes last. The
+ * longest pipeline goes first so the merged order reads as one pipeline rather
+ * than interleaving short Briefs into long ones. */
+export function stageLabels(state: PrototypeState): string[] {
+  const byVersion = new Map<string, BriefStage[]>();
+  for (const stage of state.briefStages) {
+    const held = byVersion.get(stage.brief_version_id) ?? [];
+    held.push(stage);
+    byVersion.set(stage.brief_version_id, held);
+  }
+  const pipelines = [...byVersion.values()].sort((left, right) => right.length - left.length);
+
+  const labels: string[] = [];
+  for (const pipeline of pipelines) {
+    for (const stage of [...pipeline].sort((left, right) => left.position - right.position)) {
+      if (!labels.includes(stage.label)) labels.push(stage.label);
+    }
+  }
+  for (const stage of state.terminalStages) {
+    if (!labels.includes(stage.label)) labels.push(stage.label);
+  }
+  return labels;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+export type AttentionItem = {
+  key: string;
+  /** The kind, one word. Rendered through .rc-label, so case here is prose case. */
+  kind: string;
+  subject: string;
+  fact: string;
+  /** The verb on the right edge of the row. */
+  verb: string;
+  href: string;
+};
+
+/* ── The Desk list ───────────────────────────────────────────────────────────────
+ * Derived, never authored: every string regenerates from state so it stays true.
+ * Order is severity of consequence, not recency — an unrecorded checkpoint risks
+ * the fee, an auto-closure is a promise about to be kept without anyone deciding,
+ * and unread sightings merely wait.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+export function attentionItems(state: PrototypeState): AttentionItem[] {
+  const items: AttentionItem[] = [];
+
+  for (const placement of state.placements) {
+    const candidacy = candidacyById(state, placement.candidacy_id);
+    if (!candidacy) continue;
+    const overdue = checkpointsFor(state, placement.id).find(
+      (checkpoint) => checkpoint.recorded_at === null && daysFromNow(checkpoint.due_on) < 0,
+    );
+    if (!overdue) continue;
+    const person = personById(state, candidacy.person_id);
+    const role = roleById(state, candidacy.role_id);
+    const client = role ? clientById(state, role.client_id) : undefined;
+    items.push({
+      key: `probation-${candidacy.id}`,
+      kind: "Probation",
+      subject: `${person?.full_name ?? ""} · ${client?.name ?? ""}`,
+      fact: `Day ${overdue.day} was due ${formatDate(overdue.due_on)}. Nobody has asked.`,
+      verb: "Record it",
+      href: `/prototype/candidacies?candidacy=${candidacy.id}`,
+    });
+  }
+
+  const open = state.candidacies.filter((candidacy) => candidacy.closed_at === null);
+
+  const closing = open
+    .filter((candidacy) => {
+      const stage = stageOf(state, candidacy);
+      return stage !== undefined && !stage.terminal && daysFromNow(candidacy.auto_close_at) <= 7;
+    })
+    .sort((left, right) => daysFromNow(left.auto_close_at) - daysFromNow(right.auto_close_at));
+  for (const candidacy of closing) {
+    const person = personById(state, candidacy.person_id);
+    const silent = findingsFor(state, candidacy.id).length === 0;
+    items.push({
+      key: `closure-${candidacy.id}`,
+      kind: "Auto-closure",
+      subject: person?.full_name ?? "",
+      fact: `Closes in ${daysFromNow(candidacy.auto_close_at)} days.${silent ? " No finding ever recorded." : ""}`,
+      verb: "Open",
+      href: `/prototype/candidacies?candidacy=${candidacy.id}`,
+    });
+  }
+
+  const signalled = open
+    .map((candidacy) => ({ candidacy, signals: openSignalsFor(state, candidacy.id) }))
+    .filter((entry) => entry.signals.length > 0)
+    .sort((left, right) => right.signals.length - left.signals.length);
+  for (const { candidacy, signals } of signalled) {
+    const person = personById(state, candidacy.person_id);
+    const labels = signals.map((signal) => SIGNAL_LABEL[signal.type]);
+    const fact =
+      labels.length === 1
+        ? `${labels[0]}.`
+        : `${labels[0]}, and ${labels.slice(1).map(lowerFirst).join(", ")}.`;
+    items.push({
+      key: `signals-${candidacy.id}`,
+      kind: "Signals",
+      subject: person?.full_name ?? "",
+      fact,
+      verb: "Resolve",
+      href: `/prototype/candidacies?candidacy=${candidacy.id}`,
+    });
+  }
+
+  const blocked = open.filter((candidacy) => {
+    const stage = stageOf(state, candidacy);
+    if (!stage || stage.terminal) return false;
+    return owedAtStage(state, candidacy, stage.id).length > 0;
+  });
+  if (blocked.length > 0) {
+    items.push({
+      key: "scorecards",
+      kind: "Scorecards",
+      subject:
+        blocked.length === 1
+          ? "1 candidacy cannot advance"
+          : `${blocked.length} candidacies cannot advance`,
+      fact: "Their current stage's criteria carry no finding.",
+      verb: "Review",
+      href: "/prototype/candidacies?flagged=1&state=open",
+    });
+  }
+
+  for (const role of state.roles) {
+    const flag = roleAttention(state, role);
+    if (!flag) continue;
+    const client = clientById(state, role.client_id);
+    items.push({
+      key: `role-${role.id}`,
+      kind: "Role",
+      subject: `${role.title} · ${client?.name ?? ""}`,
+      fact: flag.fact,
+      verb: "Open Brief",
+      href: `/prototype/roles?role=${role.id}`,
+    });
+  }
+
+  const unresolved = unresolvedSightings(state);
+  if (unresolved.length > 0) {
+    const months: string[] = [];
+    for (const sighting of unresolved) {
+      const search = sighting.search_id ? searchById(state, sighting.search_id) : undefined;
+      if (!search) continue;
+      const month = formatDate(search.ran_at).split(" ")[1] ?? "";
+      if (month && !months.includes(month)) months.push(month);
+    }
+    items.push({
+      key: "sourcing",
+      kind: "Sourcing",
+      subject:
+        unresolved.length === 1
+          ? "1 sighting read, and not yet anybody"
+          : `${unresolved.length} sightings read, and not yet anybody`,
+      fact:
+        months.length > 0
+          ? `From the ${months.join(" and ")} run${months.length > 1 ? "s" : ""}.`
+          : "",
+      verb: "Triage",
+      href: "/prototype/sourcing",
+    });
+  }
+
+  return items;
+}
+
+/** The nav rail's counts. A badge is absent, not zero, when the count is 0. */
+export function attentionCounts(state: PrototypeState) {
+  return {
+    desk: attentionItems(state).length,
+    roles: state.roles.filter((role) => roleAttention(state, role) !== null).length,
+    candidacies: state.candidacies.filter((candidacy) => needsAttention(state, candidacy) !== null)
+      .length,
+    sourcing: unresolvedSightings(state).length,
+  };
 }
