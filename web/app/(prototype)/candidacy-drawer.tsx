@@ -1,14 +1,21 @@
 "use client";
 
-/* The right-hand detail drawer: one candidacy, read in place.
+/* The right-hand drawer: one candidacy, and the work it needs, in place.
  *
- * A reading surface, not a workspace — advancement, scorecards, signals and
- * rejection live on the record page it links to. The two exceptions are the two
- * things that cannot wait for a page: closing the drawer, and extending the
- * auto-closure deadline, which is only offered while the deadline is the flag.
+ * A workspace, not a summary. Whatever put this record on the Desk can be
+ * finished here: the overdue checkpoint recorded, the deadline extended, a
+ * not-found finding recorded, a signal resolved or overridden, the stage
+ * message sent, the stage advanced. The one thing that leaves the drawer is
+ * quoting evidence, because a quote needs the document in front of you — that
+ * routes to the scorecard.
  *
- * No scrim and no shadow: a 1px ink edge is the whole separation. Escape closes,
- * handled by the screen that owns the URL.
+ * Each action card uses the Desk's own vocabulary (PROBATION, AUTO-CLOSURE,
+ * SCORECARD, SIGNALS), so the item a recruiter clicked is the card they land
+ * on. A card disappears when its work is done — the drawer empties the same
+ * way the Desk does.
+ *
+ * No scrim and no shadow: a 1px ink edge is the whole separation. Escape
+ * closes, handled by the screen that owns the URL.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -17,24 +24,49 @@ import { Refusal } from "@/components/refusal";
 import { StateMarker } from "@/components/state-marker";
 import { cn } from "@/lib/utils";
 import { daysFromNow, formatDate, formatDateShort } from "./_fixtures/clock";
-import type { Candidacy } from "./_fixtures/types";
+import type { Candidacy, CrosscheckSignal } from "./_fixtures/types";
 import { usePrototype } from "./_state/provider";
-import { refuseExtension } from "./_state/refusals";
+import {
+  type Refusal as RefusalShape,
+  refuseAdvance,
+  refuseCheckpoint,
+  refuseExtension,
+  refuseOverride,
+} from "./_state/refusals";
 import {
   briefVersionById,
   cellsFor,
   channelById,
   clientById,
   extensionCount,
-  needsAttention,
+  nextStage,
+  openSignalsFor,
+  overdueCheckpointFor,
+  owedAtStage,
   personById,
   provenanceIn,
   roleById,
+  SIGNAL_LABEL,
   stageOf,
 } from "./_state/selectors";
 
 const FOCUS =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
+
+/** The small bordered action, quiet until pressed. */
+const ACTION =
+  "rc-label rounded-rc border px-2 py-[3px] transition-colors " +
+  "border-rule-control text-ink hover:bg-paper-sunk " +
+  FOCUS;
+
+const ACTION_PRIMARY =
+  "rc-label rounded-rc border border-transparent px-2 py-[3px] transition-colors " +
+  "bg-ink text-ink-inverse hover:bg-ink-strong " +
+  FOCUS;
+
+const FIELD =
+  "border-rule-control rounded-rc text-14 text-ink mt-1.5 w-full border bg-transparent px-2 py-1.5 " +
+  FOCUS;
 
 const CELL_STATE = {
   evidenced: "evidenced",
@@ -60,16 +92,23 @@ export function CandidacyDrawer({
   const channel = channelById(state, candidacy.channel_id);
   const version = briefVersionById(state, candidacy.brief_version_id);
   const stage = stageOf(state, candidacy);
-  const flag = needsAttention(state, candidacy);
   const cells = cellsFor(state, candidacy);
   const extended = extensionCount(state, candidacy.id);
 
+  const open = candidacy.closed_at === null && stage !== undefined && !stage.terminal;
+  const overdue = overdueCheckpointFor(state, candidacy.id);
+  const closesIn = daysFromNow(candidacy.auto_close_at);
+  const owed = open && stage ? owedAtStage(state, candidacy, stage.id) : [];
+  const signals = candidacy.closed_at === null ? openSignalsFor(state, candidacy.id) : [];
+
+  const needsCount =
+    (overdue ? 1 : 0) +
+    (open && closesIn <= 7 ? 1 : 0) +
+    (owed.length > 0 ? 1 : 0) +
+    signals.length;
+
   const contact =
     [person?.email, person?.phone].filter(Boolean).join(" · ") || "No email or phone on the record";
-
-  const closesIn = daysFromNow(candidacy.auto_close_at);
-  const extendable =
-    candidacy.closed_at === null && stage !== undefined && !stage.terminal && closesIn <= 7;
 
   return (
     <aside
@@ -97,16 +136,61 @@ export function CandidacyDrawer({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {flag ? (
-          <div className="border-ink grid grid-cols-[3px_1fr] gap-x-3 border-y px-[18px] py-[9px]">
-            <span aria-hidden="true" className="bg-ink self-stretch" />
-            <div>
-              <p className="rc-label text-ink">{flag.flag}</p>
-              <p className="text-14 text-ink-secondary mt-1 max-w-[70ch]">{flag.detail}</p>
-              {extendable ? <ExtendClosure candidacy={candidacy} /> : null}
-            </div>
+        {needsCount > 0 ? (
+          <div className="border-ink border-b">
+            <p className="rc-label text-ink-muted px-[18px] pt-3 pb-1">Needs you</p>
+
+            {overdue ? (
+              <ActionCard kind="Probation">
+                <p className="text-14 text-ink-secondary max-w-[70ch]">
+                  Day {overdue.checkpoint.day} was due {formatDate(overdue.checkpoint.due_on)} and
+                  nobody has asked. The fee is earned at the end of probation on{" "}
+                  {formatDate(overdue.placement.probation_ends_on)}.
+                </p>
+                <CheckpointForm checkpointId={overdue.checkpoint.id} day={overdue.checkpoint.day} />
+              </ActionCard>
+            ) : null}
+
+            {open && closesIn <= 7 ? (
+              <ActionCard kind="Auto-closure">
+                <p className="text-14 text-ink-secondary max-w-[70ch]">
+                  Closes in {closesIn} days, on {formatDateShort(candidacy.auto_close_at)}. The date
+                  moves only with a message to the candidate.
+                </p>
+                <ExtendClosure candidacy={candidacy} />
+              </ActionCard>
+            ) : null}
+
+            {owed.length > 0 && stage ? (
+              <ActionCard kind="Scorecard">
+                <p className="text-14 text-ink-secondary max-w-[70ch]">
+                  {stage.label} is responsible for {owed.length === 1 ? "this" : "these"}. A finding
+                  against each, or the candidacy holds here.
+                </p>
+                <ul className="mt-2 flex flex-col gap-3">
+                  {owed.map((criterion) => (
+                    <OwedCriterion
+                      key={criterion.id}
+                      candidacyId={candidacy.id}
+                      stageId={stage.id}
+                      criterionId={criterion.id}
+                      text={criterion.text}
+                      position={criterion.position}
+                    />
+                  ))}
+                </ul>
+              </ActionCard>
+            ) : null}
+
+            {signals.map((signal) => (
+              <ActionCard key={signal.id} kind="Signals">
+                <SignalForm signal={signal} candidacyId={candidacy.id} />
+              </ActionCard>
+            ))}
           </div>
         ) : null}
+
+        {open ? <AdvanceRow candidacy={candidacy} /> : null}
 
         <div className="border-rule flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-[18px] py-[11px]">
           <StateMarker
@@ -200,10 +284,101 @@ export function CandidacyDrawer({
   );
 }
 
-/* Extending the deadline. One text field: what is written here goes to the
- * candidate verbatim and is the reason on the record — invariant 6, ADR 0012.
- * The control stays live and answers when pressed; an empty message is refused
- * with a reason, never a disabled button. */
+/* One unit of work: the 3px bar, the Desk's word for it, and the action inline. */
+function ActionCard({ kind, children }: { kind: string; children: React.ReactNode }) {
+  return (
+    <div className="border-rule grid grid-cols-[3px_1fr] gap-x-3 border-t px-[18px] py-[9px]">
+      <span aria-hidden="true" className="bg-ink self-stretch" />
+      <div className="min-w-0">
+        <p className="rc-label text-ink">{kind}</p>
+        <div className="mt-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Probation: record the checkpoint where the flag is ─────────────────────── */
+function CheckpointForm({ checkpointId, day }: { checkpointId: string; day: number }) {
+  const { dispatch } = usePrototype();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [refusal, setRefusal] = useState<RefusalShape | null>(null);
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className={cn(ACTION, "mt-2")}>
+        Record the day {day} checkpoint
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="mt-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const refused = refuseCheckpoint(note);
+        setRefusal(refused);
+        if (refused) return;
+        dispatch({
+          type: "record_checkpoint",
+          checkpoint_id: checkpointId,
+          note,
+          brief_feedback: feedback,
+        });
+      }}
+    >
+      <label className="block">
+        <span className="text-14 text-ink-secondary block">
+          What the manager said, and what the person said.
+        </span>
+        <textarea
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={3}
+          className={FIELD}
+        />
+      </label>
+      <label className="mt-2 block">
+        <span className="text-14 text-ink-muted block">
+          What should the next Brief for this client say differently? Optional.
+        </span>
+        <textarea
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          rows={2}
+          className={FIELD}
+        />
+      </label>
+      {refusal ? (
+        <Refusal
+          requirement={refusal.requirement}
+          reason={refusal.reason}
+          action={refusal.action}
+          className="mt-3"
+        />
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <button type="submit" className={ACTION_PRIMARY}>
+          Record it
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setRefusal(null);
+          }}
+          className={cn("rc-label text-ink-muted hover:text-ink px-1 py-[3px]", FOCUS)}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ── Auto-closure: the extension, which is itself a message. ADR 0012 ───────── */
 function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
   const { state, dispatch } = usePrototype();
   const [open, setOpen] = useState(false);
@@ -214,14 +389,7 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "rc-label text-ink border-rule-control rounded-rc hover:bg-paper-sunk mt-3 border px-2 py-[3px] transition-colors",
-          FOCUS,
-        )}
-      >
+      <button type="button" onClick={() => setOpen(true)} className={cn(ACTION, "mt-2")}>
         Extend the deadline
       </button>
     );
@@ -229,7 +397,7 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
 
   return (
     <form
-      className="mt-3"
+      className="mt-2"
       onSubmit={(event) => {
         event.preventDefault();
         if (refusal) {
@@ -255,10 +423,7 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           rows={3}
-          className={cn(
-            "border-rule-control rounded-rc text-14 text-ink mt-1.5 w-full border bg-transparent px-2 py-1.5",
-            FOCUS,
-          )}
+          className={FIELD}
         />
       </label>
 
@@ -273,13 +438,7 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
       ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          className={cn(
-            "rc-label text-ink-inverse bg-ink rounded-rc hover:bg-ink-strong border border-transparent px-2 py-[3px] transition-colors",
-            FOCUS,
-          )}
-        >
+        <button type="submit" className={ACTION_PRIMARY}>
           Send, and extend 30 days
         </button>
         <button
@@ -288,14 +447,240 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
             setOpen(false);
             setAttempted(false);
           }}
-          className={cn(
-            "rc-label text-ink-muted hover:text-ink px-1 py-[3px] transition-colors",
-            FOCUS,
-          )}
+          className={cn("rc-label text-ink-muted hover:text-ink px-1 py-[3px]", FOCUS)}
         >
           Cancel
         </button>
       </div>
     </form>
+  );
+}
+
+/* ── Scorecard: a finding, or the route to one ──────────────────────────────────
+ * "Not found" records here — looking and not finding needs no citation. A quote
+ * needs the document in front of you, so "Evidenced" routes to the scorecard.
+ * The intent comes first and the commitment second, because a finding is
+ * append-only: there is no undo, only a later reading beside it. */
+function OwedCriterion({
+  candidacyId,
+  stageId,
+  criterionId,
+  text,
+  position,
+}: {
+  candidacyId: string;
+  stageId: string;
+  criterionId: string;
+  text: string;
+  position: number;
+}) {
+  const { dispatch } = usePrototype();
+  const [recording, setRecording] = useState(false);
+
+  return (
+    <li>
+      <p className="text-16 text-ink">
+        {position}. {text}
+      </p>
+      {recording ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-3">
+          <Link href={`/prototype/candidacies/${candidacyId}/review`} className={ACTION}>
+            Evidenced — quote the source
+          </Link>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({
+                type: "record_finding",
+                candidacy_id: candidacyId,
+                stage_id: stageId,
+                criterion_id: criterionId,
+                status: "not_found",
+                passage: null,
+                quote: null,
+              })
+            }
+            className={ACTION}
+          >
+            Looked, and not found
+          </button>
+          <button
+            type="button"
+            onClick={() => setRecording(false)}
+            className={cn("rc-label text-ink-muted hover:text-ink px-1 py-[3px]", FOCUS)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setRecording(true)} className={cn(ACTION, "mt-1.5")}>
+          Record a finding
+        </button>
+      )}
+    </li>
+  );
+}
+
+/* ── Signals: resolve or override where the flag is ─────────────────────────────
+ * The artifact citations stay on the record page; what the drawer holds is the
+ * observation and the two honest answers to it. */
+function SignalForm({ signal, candidacyId }: { signal: CrosscheckSignal; candidacyId: string }) {
+  const { dispatch } = usePrototype();
+  const [mode, setMode] = useState<"none" | "resolve" | "override">("none");
+  const [text, setText] = useState("");
+  const [refusal, setRefusal] = useState<RefusalShape | null>(null);
+
+  return (
+    <div>
+      <p className="text-14 text-ink font-medium">{SIGNAL_LABEL[signal.type]}</p>
+      <p className="text-14 text-ink-secondary mt-0.5 max-w-[70ch]">{signal.detail}</p>
+      <p className="text-ink-muted tabular mt-1 font-mono text-12">
+        Observed {formatDateShort(signal.observed_at)} ·{" "}
+        <Link
+          href={`/prototype/candidacies/${candidacyId}?tab=crosscheck`}
+          className={cn("text-ink underline decoration-1 underline-offset-4", FOCUS)}
+        >
+          see the artifact
+        </Link>
+      </p>
+
+      {mode === "none" ? (
+        <div className="mt-2 flex flex-wrap gap-3">
+          <button type="button" onClick={() => setMode("resolve")} className={ACTION}>
+            Record what you found
+          </button>
+          <button type="button" onClick={() => setMode("override")} className={ACTION}>
+            Override
+          </button>
+        </div>
+      ) : (
+        <form
+          className="mt-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (mode === "override") {
+              const refused = refuseOverride(text);
+              setRefusal(refused);
+              if (refused) return;
+              dispatch({ type: "override_signal", signal_id: signal.id, reason_text: text });
+            } else {
+              if (text.trim().length === 0) {
+                setRefusal({
+                  requirement: "A resolution is a record of what you found.",
+                  reason: "The note is empty.",
+                  action:
+                    "Write what you checked. An empty resolution says nothing to the next reader.",
+                  invariant: 5,
+                });
+                return;
+              }
+              dispatch({ type: "resolve_signal", signal_id: signal.id, note: text });
+            }
+          }}
+        >
+          <label className="block">
+            <span className="text-14 text-ink-secondary block">
+              {mode === "resolve" ? "What did you find?" : "Why are you dismissing this?"} It stays
+              on the record under your name.
+            </span>
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={3}
+              className={FIELD}
+            />
+          </label>
+          {refusal ? (
+            <Refusal
+              requirement={refusal.requirement}
+              reason={refusal.reason}
+              action={refusal.action}
+              footnote={`Invariant ${refusal.invariant}`}
+              className="mt-3"
+            />
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button type="submit" className={ACTION_PRIMARY}>
+              {mode === "resolve" ? "Record it" : "Override"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("none");
+                setRefusal(null);
+              }}
+              className={cn("rc-label text-ink-muted hover:text-ink px-1 py-[3px]", FOCUS)}
+            >
+              Leave it open
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ── The stage, live. The control answers when pressed ──────────────────────── */
+function AdvanceRow({ candidacy }: { candidacy: Candidacy }) {
+  const { state, dispatch } = usePrototype();
+  const [refusal, setRefusal] = useState<RefusalShape | null>(null);
+
+  const stage = stageOf(state, candidacy);
+  const onward = nextStage(state, candidacy);
+  if (!stage || !onward) return null;
+
+  return (
+    <div className="border-rule border-b px-[18px] py-[11px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="text-14 text-ink-secondary">
+          {stage.label} <span className="text-ink-muted">→ {onward.label}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            const refused = refuseAdvance(state, candidacy.id);
+            setRefusal(refused);
+            if (refused) return;
+            dispatch({ type: "advance_stage", candidacy_id: candidacy.id });
+          }}
+          className={ACTION}
+        >
+          Advance
+        </button>
+      </div>
+      {refusal ? (
+        <Refusal
+          requirement={refusal.requirement}
+          reason={refusal.reason}
+          action={refusal.action}
+          items={refusal.items}
+          className="mt-3"
+        >
+          {refusal.invariant === 6 ? (
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({
+                  type: "send_stage_message",
+                  candidacy_id: candidacy.id,
+                  stage_id: stage.id,
+                });
+                setRefusal(null);
+              }}
+              className={ACTION_PRIMARY}
+            >
+              Send the {stage.label} message
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setRefusal(null)}
+            className={cn("rc-label text-ink-muted hover:text-ink px-1 py-[3px]", FOCUS)}
+          >
+            Leave it here
+          </button>
+        </Refusal>
+      ) : null}
+    </div>
   );
 }

@@ -499,6 +499,16 @@ export function owedAtStage(
   );
 }
 
+/** The first unrecorded checkpoint past its due date, with its placement. */
+export function overdueCheckpointFor(state: PrototypeState, candidacyId: CandidacyId) {
+  const placement = placementFor(state, candidacyId);
+  if (!placement) return undefined;
+  const checkpoint = checkpointsFor(state, placement.id).find(
+    (item) => item.recorded_at === null && daysFromNow(item.due_on) < 0,
+  );
+  return checkpoint ? { placement, checkpoint } : undefined;
+}
+
 /* ── The single definition of "needs attention" ──────────────────────────────────
  * Everything illuminated anywhere in the cockpit comes from this predicate — the
  * nav badges, the Desk list, the table's attention column, the drawer's flag
@@ -507,17 +517,12 @@ export function owedAtStage(
  * closed record can need nothing at all.
  * ─────────────────────────────────────────────────────────────────────────────── */
 export function needsAttention(state: PrototypeState, candidacy: Candidacy): Flag | null {
-  const placement = placementFor(state, candidacy.id);
-  if (placement) {
-    const overdue = checkpointsFor(state, placement.id).find(
-      (checkpoint) => checkpoint.recorded_at === null && daysFromNow(checkpoint.due_on) < 0,
-    );
-    if (overdue) {
-      return {
-        flag: `Checkpoint ${daysSince(overdue.due_on)} days past due`,
-        detail: `Day ${overdue.day} was due ${formatDate(overdue.due_on)} and nobody has asked. The fee is earned at the end of probation on ${formatDate(placement.probation_ends_on)}, not on the start date.`,
-      };
-    }
+  const overdue = overdueCheckpointFor(state, candidacy.id);
+  if (overdue) {
+    return {
+      flag: `Checkpoint ${daysSince(overdue.checkpoint.due_on)} days past due`,
+      detail: `Day ${overdue.checkpoint.day} was due ${formatDate(overdue.checkpoint.due_on)} and nobody has asked. The fee is earned at the end of probation on ${formatDate(overdue.placement.probation_ends_on)}, not on the start date.`,
+    };
   }
 
   if (candidacy.closed_at !== null) return null;
@@ -664,9 +669,7 @@ export function attentionItems(state: PrototypeState): AttentionItem[] {
   for (const placement of state.placements) {
     const candidacy = candidacyById(state, placement.candidacy_id);
     if (!candidacy) continue;
-    const overdue = checkpointsFor(state, placement.id).find(
-      (checkpoint) => checkpoint.recorded_at === null && daysFromNow(checkpoint.due_on) < 0,
-    );
+    const overdue = overdueCheckpointFor(state, candidacy.id);
     if (!overdue) continue;
     const person = personById(state, candidacy.person_id);
     const role = roleById(state, candidacy.role_id);
@@ -675,7 +678,7 @@ export function attentionItems(state: PrototypeState): AttentionItem[] {
       key: `probation-${candidacy.id}`,
       kind: "Probation",
       subject: `${person?.full_name ?? ""} · ${client?.name ?? ""}`,
-      fact: `Day ${overdue.day} was due ${formatDate(overdue.due_on)}. Nobody has asked.`,
+      fact: `Day ${overdue.checkpoint.day} was due ${formatDate(overdue.checkpoint.due_on)}. Nobody has asked.`,
       verb: "Record it",
       href: `/prototype/candidacies?candidacy=${candidacy.id}`,
     });

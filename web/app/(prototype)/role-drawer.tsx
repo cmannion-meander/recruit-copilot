@@ -1,17 +1,21 @@
 "use client";
 
-/* The role drawer: what must be evidenced, and where.
+/* The role drawer: what must be evidenced, and where — and, on a draft role,
+ * the controls to finish saying so.
  *
- * The Brief in its two halves — the criteria, and the stage each one is evidenced
- * at. A criterion assigned to no stage renders in full ink, because it is a
- * refusal waiting to happen: the role cannot open until somebody says where it is
- * evidenced. The flag block above says so in the words of the refusal itself.
+ * The Cannot-open loop completes in place: add the missing criterion, assign
+ * each one to the stage that evidences it, press Open. The Open control is
+ * live on every draft role, including where it will refuse — the refusal names
+ * what is missing, which is how the reader learns the rule without a tutorial.
  */
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Refusal } from "@/components/refusal";
 import { StateMarker } from "@/components/state-marker";
 import { cn } from "@/lib/utils";
 import { formatDate } from "./_fixtures/clock";
 import { usePrototype } from "./_state/provider";
+import { type Refusal as RefusalShape, refuseOpenRole } from "./_state/refusals";
 import {
   candidaciesForRole,
   clientById,
@@ -25,9 +29,20 @@ import {
 const FOCUS =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
 
+const ACTION =
+  "rc-label rounded-rc border px-2 py-[3px] transition-colors " +
+  "border-rule-control text-ink hover:bg-paper-sunk " +
+  FOCUS;
+
+const ACTION_PRIMARY =
+  "rc-label rounded-rc border border-transparent px-2 py-[3px] transition-colors " +
+  "bg-ink text-ink-inverse hover:bg-ink-strong " +
+  FOCUS;
+
 export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }) {
-  const { state } = usePrototype();
+  const { state, dispatch } = usePrototype();
   const router = useRouter();
+  const [refusal, setRefusal] = useState<RefusalShape | null>(null);
 
   const role = state.roles.find((item) => item.id === roleId);
   if (!role) return null;
@@ -38,6 +53,7 @@ export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () =>
   const stages = version ? stagesFor(state, version.id) : [];
   const held = candidaciesForRole(state, role.id);
   const flag = roleAttention(state, role);
+  const draft = role.state === "draft";
 
   const evidencedAt = (criterionId: string) =>
     stages.filter((stage) => stage.criterion_ids.includes(criterionId)).map((stage) => stage.label);
@@ -74,7 +90,47 @@ export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () =>
             <div>
               <p className="rc-label text-ink">{flag.flag}</p>
               <p className="text-14 text-ink-secondary mt-1 max-w-[70ch]">{flag.detail}</p>
+              {criteria.length < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "add_criterion", role_id: role.id })}
+                  className={cn(ACTION, "mt-2")}
+                >
+                  Add the third criterion
+                </button>
+              ) : null}
             </div>
+          </div>
+        ) : null}
+
+        {/* The Open control belongs to the draft state, not to the flag — it must
+         * survive the flag clearing, or the one moment the role can finally open
+         * is the moment the button disappears. It stays live either way and
+         * answers with the refusal when pressed. */}
+        {draft ? (
+          <div className="border-rule border-b px-[18px] py-[11px]">
+            <button
+              type="button"
+              onClick={() => {
+                const refused = refuseOpenRole(state, role.id);
+                setRefusal(refused);
+                if (refused) return;
+                dispatch({ type: "open_role", role_id: role.id });
+              }}
+              className={ACTION_PRIMARY}
+            >
+              Open this role
+            </button>
+            {refusal ? (
+              <Refusal
+                requirement={refusal.requirement}
+                reason={refusal.reason}
+                action={refusal.action}
+                items={refusal.items}
+                footnote={`Invariant ${refusal.invariant}`}
+                className="mt-3"
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -93,6 +149,33 @@ export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () =>
                     <p className="text-16 text-ink">{criterion.text}</p>
                     {at.length > 0 ? (
                       <p className="text-14 text-ink-muted mt-0.5">Evidenced at {at.join(", ")}</p>
+                    ) : draft ? (
+                      <label className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="text-14 text-ink">Evidenced at</span>
+                        <select
+                          defaultValue=""
+                          onChange={(event) => {
+                            if (event.target.value === "") return;
+                            dispatch({
+                              type: "assign_criterion",
+                              criterion_id: criterion.id,
+                              stage_id: event.target.value,
+                            });
+                            setRefusal(null);
+                          }}
+                          className={cn(
+                            "border-rule-control rounded-rc text-14 text-ink-secondary border bg-transparent px-1.5 py-[3px]",
+                            FOCUS,
+                          )}
+                        >
+                          <option value="">Choose a stage</option>
+                          {stages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     ) : (
                       <p className="text-14 text-ink mt-0.5">Assigned to no stage</p>
                     )}
