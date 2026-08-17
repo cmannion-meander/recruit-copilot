@@ -115,15 +115,26 @@ def test_same_org_read_returns_rows():
     emptiness elsewhere means isolation rather than absence.
     """
     from django.db import transaction
+    from django.utils import timezone
 
     from organizations.models import Organization
     from people.models import Person
+    from sightings.models import Sighting
 
     org = Organization.objects.create(name="Positive Control")
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute("SELECT set_config('app.current_org', %s, true)", [str(org.id)])
-        Person.objects.create(organization=org, full_name="Visible Row")
+            cur.execute("SET CONSTRAINTS person_provenance DEFERRED")
+        person = Person.objects.create(organization=org, full_name="Visible Row")
+        Sighting.objects.create(
+            organization=org,
+            person=person,
+            source_url="https://example.test/visible-row",
+            retrieved_at=timezone.now(),
+            snapshot_excerpt="Visible Row — as read on the page",
+            resolving=True,
+        )
 
     with psycopg.connect(APP_DSN) as conn, conn.transaction():
         conn.execute("SELECT set_config('app.current_org', %s, true)", (str(org.id),))
@@ -217,6 +228,7 @@ def test_search_cannot_attach_to_unopened_role(draft_role):
     the case the gate exists for — you cannot look for someone before agreeing what counts.
     """
     from django.db.utils import IntegrityError
+
     from searches.models import Search
 
     with pytest.raises(IntegrityError):
@@ -307,10 +319,47 @@ def test_person_cannot_exist_without_a_resolving_sighting(organization):
         Person.objects.create(organization=organization, full_name="No Source")
 
 
+@pytest.mark.django_db(transaction=True)
+def test_person_with_a_resolving_sighting_commits():
+    """
+    The ordinary path (finding 15 discipline): the provenance trigger is deferred by the
+    legitimate creation path — person then sighting in one transaction — and the check
+    runs at commit, where it is true. Without this test the trigger could refuse
+    everything and the refusal test above would still pass.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from organizations.models import Organization
+    from people.models import Person
+    from sightings.models import Sighting
+
+    org = Organization.objects.create(name="Provenance Control")
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute("SELECT set_config('app.current_org', %s, true)", [str(org.id)])
+            cur.execute("SET CONSTRAINTS person_provenance DEFERRED")
+        person = Person.objects.create(organization=org, full_name="Sourced Properly")
+        Sighting.objects.create(
+            organization=org,
+            person=person,
+            source_url="https://stelmarkengineering.example/people",
+            retrieved_at=timezone.now(),
+            snapshot_excerpt="Sourced Properly — Group Financial Controller",
+            resolving=True,
+        )
+
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute("SELECT set_config('app.current_org', %s, true)", [str(org.id)])
+        assert Person.objects.filter(full_name="Sourced Properly").exists()
+
+
 @pytest.mark.django_db
 def test_sighting_requires_a_source_and_a_retrieval_time(person):
     """A sighting without `retrieved_at` cannot be told apart from a dead link later."""
     from django.db.utils import IntegrityError
+
     from sightings.models import Sighting
 
     with pytest.raises(IntegrityError):

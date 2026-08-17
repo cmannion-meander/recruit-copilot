@@ -80,11 +80,13 @@ they are found so the clone-day edit list already exists:
   create the roles; production provisioning does the same work through the admin account
   and the portal/CLI.
 - **`BYPASSRLS` cannot be granted without a superuser**, so the `rcp_login` role (ADR 0014)
-  cannot be created as designed. The portable replacement, when needed: drop the definer
-  role and add a second, narrow policy on `app_user` keyed to its own GUC —
-  `app.login_username = username` — so the login flow exposes exactly one row to itself and
-  no role bypasses RLS at all. Local keeps the definer function because it exists and the
-  contract tests pin its behaviour; swap it in the clone.
+  cannot be created as designed. Two functions ride on it — the login lookup and the
+  invariant 9 provenance trigger (the register in ADR 0014 is the full list). The portable
+  replacements, when needed: for login, a second narrow policy on `app_user` keyed to its
+  own GUC (`app.login_username = username`); for the trigger, a permissive policy on
+  `sighting` scoped to the GUC-independent integrity read, or the same check re-expressed
+  against a GUC set by the trigger itself. Local keeps the definer functions because they
+  exist and the contract tests pin their behaviour; swap them in the clone.
 - **Pooling is already safe.** Org context is `set_config(..., true)` inside each request
   transaction, so PgBouncer in transaction mode cannot leak one request's org into the
   next. Nothing to change here — recorded so nobody "fixes" it.

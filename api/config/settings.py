@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     "clients",
     "roles",
     "people",
+    "searches",
+    "sightings",
 ]
 
 MIDDLEWARE = [
