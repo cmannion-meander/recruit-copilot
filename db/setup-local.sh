@@ -66,6 +66,7 @@ if [[ "${1:-}" == "--reset" ]]; then
   echo "Dropping $DBNAME ..."
   psql_super -c "DROP DATABASE IF EXISTS $DBNAME;"
   psql_super -c "DROP ROLE IF EXISTS rcp_app;"
+  psql_super -c "DROP ROLE IF EXISTS rcp_login;"
   psql_super -c "DROP ROLE IF EXISTS rcp_owner;"
 fi
 
@@ -81,8 +82,17 @@ BEGIN
     CREATE ROLE rcp_app WITH LOGIN PASSWORD '$APP_PASSWORD'
       NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
   END IF;
+  -- The one role that can cross RLS, and it cannot log in. It exists to own SECURITY
+  -- DEFINER lookup functions (the login crossing, ADR 0014) — never to run a query of
+  -- its own. rcp_owner is made a member below so migrations can hand functions to it;
+  -- membership does not confer BYPASSRLS, because role attributes are not inherited.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rcp_login') THEN
+    CREATE ROLE rcp_login WITH NOLOGIN
+      NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
+  END IF;
 END
 \$\$;
+GRANT rcp_login TO rcp_owner;
 SQL
 
 echo "Creating database ..."

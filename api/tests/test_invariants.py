@@ -13,7 +13,7 @@ Rules for this file:
 
 A note on the database connection, because it is the subtle part:
 
-Django's test runner connects as the role in DATABASE_URL, which must be `rcp_owner` because
+Django's test runner connects as `rcp_owner` — the role in MIGRATION_DATABASE_URL — because
 creating the test database needs CREATEDB. But `rcp_owner` OWNS the tables, and table owners
 bypass RLS unless FORCE ROW LEVEL SECURITY is set. So the isolation tests below open their
 own raw connection as `rcp_app` — the role the running application actually uses. Testing
@@ -79,8 +79,12 @@ def test_cross_tenant_read_returns_nothing(two_orgs_with_data):
     """The promise we cannot be caught wrong on."""
     org_a, org_b = two_orgs_with_data
     with psycopg.connect(APP_DSN) as conn, conn.transaction():
-        conn.execute("SET LOCAL app.current_org = %s", (str(org_a.id),))
-        rows = conn.execute("SELECT id FROM person WHERE organization_id = %s", (org_b.id,)).fetchall()
+        # set_config(..., true) is SET LOCAL in function form — a utility statement
+        # cannot take a bind parameter, so the function form is the parameterisable one.
+        conn.execute("SELECT set_config('app.current_org', %s, true)", (str(org_a.id),))
+        rows = conn.execute(
+            "SELECT id FROM person WHERE organization_id = %s", (org_b.id,)
+        ).fetchall()
     assert rows == [], "cross-tenant read returned rows"
 
 
@@ -98,9 +102,33 @@ def test_org_context_does_not_leak_across_transactions(two_orgs_with_data):
     org_a, _ = two_orgs_with_data
     with psycopg.connect(APP_DSN) as conn:
         with conn.transaction():
-            conn.execute("SET LOCAL app.current_org = %s", (str(org_a.id),))
+            conn.execute("SELECT set_config('app.current_org', %s, true)", (str(org_a.id),))
         leaked = conn.execute("SELECT current_setting('app.current_org', true)").fetchone()[0]
     assert not leaked, "org context leaked out of its transaction"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_same_org_read_returns_rows():
+    """
+    The positive control. The isolation tests above assert emptiness, which an empty table
+    satisfies vacuously — this one proves the policy admits the org's own rows, so the
+    emptiness elsewhere means isolation rather than absence.
+    """
+    from django.db import transaction
+
+    from organizations.models import Organization
+    from people.models import Person
+
+    org = Organization.objects.create(name="Positive Control")
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute("SELECT set_config('app.current_org', %s, true)", [str(org.id)])
+        Person.objects.create(organization=org, full_name="Visible Row")
+
+    with psycopg.connect(APP_DSN) as conn, conn.transaction():
+        conn.execute("SELECT set_config('app.current_org', %s, true)", (str(org.id),))
+        rows = conn.execute("SELECT full_name FROM person").fetchall()
+    assert rows == [("Visible Row",)], "the org's own rows are not visible under its context"
 
 
 # --------------------------------------------------------------------------------------
@@ -122,9 +150,7 @@ def test_no_scoring_column_exists_anywhere():
             WHERE table_schema = 'public'
             """
         )
-        offenders = [
-            f"{t}.{c}" for t, c in cur.fetchall() if FORBIDDEN_COLUMN.search(c)
-        ]
+        offenders = [f"{t}.{c}" for t, c in cur.fetchall() if FORBIDDEN_COLUMN.search(c)]
     assert not offenders, f"scoring-shaped columns found: {offenders}"
 
 
@@ -150,8 +176,8 @@ def test_role_cannot_open_with_fewer_than_three_criteria(role_with_two_criteria)
 
 @pytest.mark.django_db
 def test_candidacy_cannot_attach_to_unopened_role(draft_role, person):
-    from django.db.utils import IntegrityError
     from candidacies.models import Candidacy
+    from django.db.utils import IntegrityError
 
     with pytest.raises(IntegrityError):
         Candidacy.objects.create(role=draft_role, person=person)
@@ -190,8 +216,8 @@ def test_cannot_advance_with_incomplete_scorecard(review_missing_two_findings):
 
 @pytest.mark.django_db
 def test_rejection_requires_reason_code_and_text(candidacy):
-    from django.db.utils import IntegrityError
     from decisions.models import Decision
+    from django.db.utils import IntegrityError
 
     with pytest.raises(IntegrityError):
         Decision.objects.create(candidacy=candidacy, kind="reject", reason_text="")
@@ -247,6 +273,7 @@ def test_person_cannot_exist_without_a_resolving_sighting(organization):
     check, which is the failure this product exists to make impossible.
     """
     from django.db.utils import IntegrityError
+
     from people.models import Person
 
     with pytest.raises(IntegrityError):
@@ -270,9 +297,7 @@ def test_evidence_points_at_a_document_or_a_sighting(review, criterion):
     from evidence.models import Evidence
 
     with pytest.raises(IntegrityError):
-        Evidence.objects.create(
-            review=review, criterion=criterion, document=None, sighting=None
-        )
+        Evidence.objects.create(review=review, criterion=criterion, document=None, sighting=None)
 
 
 # --------------------------------------------------------------------------------------
