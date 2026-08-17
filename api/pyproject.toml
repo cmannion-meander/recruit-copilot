@@ -26,6 +26,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 extend-select = ["I"]
+# RUF012 flags mutable class attributes, which is Django's own idiom for Meta.constraints
+# and friends — it would fire in every model file for the framework's recommended shape.
+ignore = ["RUF012"]
 
 [tool.ruff.lint.per-file-ignores]
 # Django migrations follow Django's generated shape: class-attribute lists and

@@ -175,6 +175,33 @@ def test_role_cannot_open_with_fewer_than_three_criteria(role_with_two_criteria)
 
 
 @pytest.mark.django_db
+def test_role_cannot_open_with_unassigned_criteria(role_with_unassigned_criterion):
+    """
+    Invariant 1's coverage half (ADR 0011): three criteria are not enough — every one must
+    be assigned to the stage that will evidence it. The refusal names the criteria, because
+    a validator that answers with a count leaves the reader a riddle
+    (docs/prototype-findings.md §11).
+    """
+    from roles.exceptions import BriefIncomplete
+
+    with pytest.raises(BriefIncomplete) as excinfo:
+        role_with_unassigned_criterion.open()
+    assert excinfo.value.items, "the refusal must name the unassigned criteria"
+
+
+@pytest.mark.django_db
+def test_role_opens_and_pins_the_brief_version(role_ready_to_open):
+    """
+    The ordinary path, deliberately (docs/prototype-findings.md §15): a fixture set
+    arranged only to make refusals reachable is where an unimplementable rule hides.
+    Opening pins the version, because every later record renders against the pin.
+    """
+    role_ready_to_open.open()
+    assert role_ready_to_open.state == "open"
+    assert role_ready_to_open.pinned_brief_version_id is not None
+
+
+@pytest.mark.django_db
 def test_candidacy_cannot_attach_to_unopened_role(draft_role, person):
     from candidacies.models import Candidacy
     from django.db.utils import IntegrityError

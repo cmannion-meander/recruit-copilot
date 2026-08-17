@@ -62,6 +62,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "procrastinate.contrib.django",
     "organizations",
+    "clients",
+    "roles",
     "people",
 ]
 

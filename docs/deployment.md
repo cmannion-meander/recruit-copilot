@@ -69,6 +69,26 @@ isolation guarantee is gone in the only place it matters.
 - Next reads `PORT` from the environment — don't hardcode it
 - Either build locally and deploy the output, or enable SCM build
 
+## Managed Postgres parity
+
+The build runs against local Postgres on purpose; production will be a clone of this repo
+with edits over the top. These are the known places a managed service differs, collected as
+they are found so the clone-day edit list already exists:
+
+- **No superuser.** On Azure Database for PostgreSQL Flexible Server the admin is a member
+  of `azure_pg_admin`, not a superuser. `db/setup-local.sh` assumes a superuser exists to
+  create the roles; production provisioning does the same work through the admin account
+  and the portal/CLI.
+- **`BYPASSRLS` cannot be granted without a superuser**, so the `rcp_login` role (ADR 0014)
+  cannot be created as designed. The portable replacement, when needed: drop the definer
+  role and add a second, narrow policy on `app_user` keyed to its own GUC —
+  `app.login_username = username` — so the login flow exposes exactly one row to itself and
+  no role bypasses RLS at all. Local keeps the definer function because it exists and the
+  contract tests pin its behaviour; swap it in the clone.
+- **Pooling is already safe.** Org context is `set_config(..., true)` inside each request
+  transaction, so PgBouncer in transaction mode cannot leak one request's org into the
+  next. Nothing to change here — recorded so nobody "fixes" it.
+
 ## Deliberately deferred
 
 Front Door, WAF, deployment slots, staging, multi-region, autoscaling. Each is real and none
