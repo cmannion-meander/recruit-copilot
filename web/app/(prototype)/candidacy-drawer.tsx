@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CriterionCellMark } from "@/components/criteria-row";
 import { Refusal } from "@/components/refusal";
+import { StageRail } from "@/components/stage-rail";
 import { StateMarker } from "@/components/state-marker";
 import { cn } from "@/lib/utils";
 import { daysFromNow, formatDate, formatDateShort } from "./_fixtures/clock";
@@ -48,6 +49,7 @@ import {
   roleById,
   SIGNAL_LABEL,
   stageOf,
+  stagesFor,
 } from "./_state/selectors";
 
 const FOCUS =
@@ -96,6 +98,10 @@ export function CandidacyDrawer({
   const extended = extensionCount(state, candidacy.id);
 
   const open = candidacy.closed_at === null && stage !== undefined && !stage.terminal;
+  const pipeline = stagesFor(state, candidacy.brief_version_id).map((item) => ({
+    id: item.id,
+    label: item.label,
+  }));
   const overdue = overdueCheckpointFor(state, candidacy.id);
   const closesIn = daysFromNow(candidacy.auto_close_at);
   const owed = open && stage ? owedAtStage(state, candidacy, stage.id) : [];
@@ -142,10 +148,9 @@ export function CandidacyDrawer({
 
             {overdue ? (
               <ActionCard kind="Probation">
-                <p className="text-14 text-ink-secondary max-w-[70ch]">
-                  Day {overdue.checkpoint.day} was due {formatDate(overdue.checkpoint.due_on)} and
-                  nobody has asked. The fee is earned at the end of probation on{" "}
-                  {formatDate(overdue.placement.probation_ends_on)}.
+                <p className="text-14 text-ink-secondary tabular">
+                  Day {overdue.checkpoint.day} · due {formatDateShort(overdue.checkpoint.due_on)} ·
+                  probation ends {formatDateShort(overdue.placement.probation_ends_on)}
                 </p>
                 <CheckpointForm checkpointId={overdue.checkpoint.id} day={overdue.checkpoint.day} />
               </ActionCard>
@@ -153,21 +158,16 @@ export function CandidacyDrawer({
 
             {open && closesIn <= 7 ? (
               <ActionCard kind="Auto-closure">
-                <p className="text-14 text-ink-secondary max-w-[70ch]">
-                  Closes in {closesIn} days, on {formatDateShort(candidacy.auto_close_at)}. The date
-                  moves only with a message to the candidate.
+                <p className="text-14 text-ink-secondary tabular">
+                  Closes in {closesIn} days · {formatDateShort(candidacy.auto_close_at)}
                 </p>
                 <ExtendClosure candidacy={candidacy} />
               </ActionCard>
             ) : null}
 
             {owed.length > 0 && stage ? (
-              <ActionCard kind="Scorecard">
-                <p className="text-14 text-ink-secondary max-w-[70ch]">
-                  {stage.label} is responsible for {owed.length === 1 ? "this" : "these"}. A finding
-                  against each, or the candidacy holds here.
-                </p>
-                <ul className="mt-2 flex flex-col gap-3">
+              <ActionCard kind={`Scorecard · ${stage.label}`}>
+                <ul className="flex flex-col gap-3">
                   {owed.map((criterion) => (
                     <OwedCriterion
                       key={criterion.id}
@@ -192,36 +192,28 @@ export function CandidacyDrawer({
 
         {open ? <AdvanceRow candidacy={candidacy} /> : null}
 
-        <div className="border-rule flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-[18px] py-[11px]">
-          <StateMarker
-            label={stage?.label ?? ""}
-            shape={candidacy.closed_at !== null ? "outlined" : "filled"}
-          />
-          <p className="text-14 text-ink-muted tabular">
-            {candidacy.closed_at !== null
-              ? `Closed ${formatDateShort(candidacy.closed_at)}`
-              : `Auto-closes ${formatDateShort(candidacy.auto_close_at)} · ${closesIn} days`}
-            {extended > 0
-              ? ` · extended ${extended === 1 ? "once" : extended === 2 ? "twice" : `${extended} times`}`
-              : ""}
+        <div className="border-rule border-b px-[18px] py-[11px]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {open && stage && pipeline.length > 0 ? (
+              <StageRail stages={pipeline} currentId={stage.id} />
+            ) : (
+              <StateMarker label={stage?.label ?? ""} shape="outlined" />
+            )}
+            <p className="text-14 text-ink-muted tabular">
+              {candidacy.closed_at !== null
+                ? `Closed ${formatDateShort(candidacy.closed_at)}`
+                : `Auto-closes ${formatDateShort(candidacy.auto_close_at)} · ${closesIn} days`}
+              {extended > 0
+                ? ` · extended ${extended === 1 ? "once" : extended === 2 ? "twice" : `${extended} times`}`
+                : ""}
+            </p>
+          </div>
+          <p className="text-14 text-ink-muted mt-1.5">
+            {[person?.current_employer, person?.location, contact, channel?.name]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
-
-        <dl className="grid grid-cols-[104px_1fr] gap-x-[14px] gap-y-1 px-[18px] py-3">
-          {(
-            [
-              ["Employer", person?.current_employer ?? ""],
-              ["Location", person?.location ?? ""],
-              ["Contact", contact],
-              ["Channel", channel?.name ?? ""],
-            ] as const
-          ).map(([term, value]) => (
-            <div key={term} className="contents">
-              <dt className="text-14 text-ink-muted">{term}</dt>
-              <dd className="text-14 text-ink-secondary min-w-0">{value}</dd>
-            </div>
-          ))}
-        </dl>
 
         <section className="px-[18px] py-3">
           <p className="rc-label text-ink-muted">
@@ -416,8 +408,7 @@ function ExtendClosure({ candidacy }: { candidacy: Candidacy }) {
     >
       <label className="block">
         <span className="text-14 text-ink-secondary block">
-          The message to the candidate. They read exactly what you write, and it is the reason on
-          the record.
+          Sent to the candidate word for word. It is the reason on the record.
         </span>
         <textarea
           value={message}

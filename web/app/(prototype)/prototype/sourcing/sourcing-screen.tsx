@@ -49,39 +49,45 @@ export function SourcingScreen() {
       <p className="rc-label text-ink-muted mt-[22px]">
         Read, and not yet anybody · {unresolved.length}
       </p>
-      <div className="overflow-x-auto">
-        <ul className="border-ink mt-2 min-w-[880px] border-t">
-          {unresolved.map((sighting) => {
-            const firstSentence = sighting.snapshot_excerpt.split(". ")[0];
-            return (
-              <li
-                key={sighting.id}
-                className="border-rule grid grid-cols-[3px_minmax(0,1fr)_300px_132px] items-center gap-x-4 border-b py-[9px]"
-              >
-                <span aria-hidden="true" className="bg-ink self-stretch" />
-                <span className="min-w-0">
-                  <span className="text-16 text-ink block">{firstSentence}</span>
-                  <span className="text-14 text-ink-muted block">{sighting.source_kind}</span>
-                </span>
-                <span className="text-ink-muted tabular font-mono text-12">
-                  {sighting.source_name} · read {formatDateShort(sighting.retrieved_at)}
-                </span>
-                <Control
-                  variant="secondary"
-                  className="text-14 px-3 py-1.5"
-                  onClick={() =>
-                    // The sighting is the resolving source — invariant 9. The row
-                    // leaves this list because person_id stops being null.
-                    dispatch({ type: "create_person_from_sighting", sighting_id: sighting.id })
-                  }
+      {unresolved.length === 0 ? (
+        <p className="text-16 text-ink-secondary border-ink mt-2 border-t pt-3">
+          Nothing is waiting. Every sighting has been read into the record.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <ul className="border-ink mt-2 min-w-[880px] border-t">
+            {unresolved.map((sighting) => {
+              const firstSentence = sighting.snapshot_excerpt.split(". ")[0];
+              return (
+                <li
+                  key={sighting.id}
+                  className="border-rule grid grid-cols-[3px_minmax(0,1fr)_300px_132px] items-center gap-x-4 border-b py-[9px]"
                 >
-                  Create person
-                </Control>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+                  <span aria-hidden="true" className="bg-ink self-stretch" />
+                  <span className="min-w-0">
+                    <span className="text-16 text-ink block">{firstSentence}</span>
+                    <span className="text-14 text-ink-muted block">{sighting.source_kind}</span>
+                  </span>
+                  <span className="text-ink-muted tabular font-mono text-12">
+                    {sighting.source_name} · read {formatDateShort(sighting.retrieved_at)}
+                  </span>
+                  <Control
+                    variant="secondary"
+                    className="text-14 px-3 py-1.5"
+                    onClick={() =>
+                      // The sighting is the resolving source — invariant 9. The row
+                      // leaves this list because person_id stops being null.
+                      dispatch({ type: "create_person_from_sighting", sighting_id: sighting.id })
+                    }
+                  >
+                    Create person
+                  </Control>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <p className={cn("rc-label text-ink-muted mt-[26px]")}>Runs{pinnedLine}</p>
       <div className="overflow-x-auto">

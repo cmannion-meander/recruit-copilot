@@ -21,8 +21,8 @@ import { ActivityList } from "@/components/activity-list";
 import { Control } from "@/components/control";
 import { CriteriaKey, CriteriaRow } from "@/components/criteria-row";
 import { DaysRemaining } from "@/components/days-remaining";
-import { RecordField, RecordFields } from "@/components/record-field";
 import { Refusal } from "@/components/refusal";
+import { StageRail } from "@/components/stage-rail";
 import { StateMarker } from "@/components/state-marker";
 import { cn } from "@/lib/utils";
 import { daysFromNow, formatDate } from "../../../_fixtures/clock";
@@ -123,10 +123,14 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
         lede={person?.headline}
         aside={
           <div className="flex flex-col items-end gap-2">
-            <StateMarker
-              label={stage?.label ?? ""}
-              shape={stage?.terminal ? "outlined" : "filled"}
-            />
+            {candidacy.closed_at === null && stage && !stage.terminal ? (
+              <StageRail
+                stages={stages.map((item) => ({ id: item.id, label: item.label }))}
+                currentId={stage.id}
+              />
+            ) : (
+              <StateMarker label={stage?.label ?? ""} shape="outlined" />
+            )}
             <p className="text-14 text-ink-muted tabular">
               {candidacy.closed_at !== null
                 ? `Closed ${formatDate(candidacy.closed_at)}`
@@ -167,10 +171,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
 
       {tab === "overview" ? (
         <>
-          <Section
-            title="Stage"
-            note="The control is live. It answers when it is pressed, which is how the record says what it is missing."
-          >
+          <Section title="Stage">
             {refusal ? (
               <Refusal
                 className="max-w-3xl"
@@ -282,10 +283,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
               </div>
             </Section>
           ) : !stage?.terminal ? (
-            <Section
-              title="Submission Record"
-              note="It cannot be created while a signal is open, it needs a finding against every criterion, and it cannot be edited once it exists."
-            >
+            <Section title="Submission Record">
               <Link
                 href={`/prototype/candidacies/${candidacy.id}/submission`}
                 className="rounded-rc border-rule-control bg-paper-raised text-ink hover:bg-paper-sunk focus-visible:outline-ink inline-block border px-4 py-2.5 text-16 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -296,10 +294,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
           ) : null}
 
           {placement ? (
-            <Section
-              title="Placement"
-              note="The fee is earned at the end of probation, not on the start date."
-            >
+            <Section title="Placement">
               <div className="max-w-[62ch]">
                 <p className="text-16 text-ink">
                   Started {formatDate(placement.started_on)} · probation ends{" "}
@@ -332,10 +327,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
               <RejectionPanel candidacy={candidacy} decision={decision} />
             </Section>
           ) : !stage?.terminal ? (
-            <Section
-              title="Decision"
-              note="A reason code and written text, both. What you write is what the candidate reads."
-            >
+            <Section title="Decision">
               {rejecting ? (
                 <RejectionPanel candidacy={candidacy} decision={decision} />
               ) : (
@@ -346,32 +338,23 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
             </Section>
           ) : null}
 
-          <Section title="The person">
-            <RecordFields columns={2} className="max-w-4xl">
-              <RecordField
-                label="Record"
-                value={
-                  <Link
-                    href={`/prototype/people/${candidacy.person_id}`}
-                    className="focus-visible:outline-ink underline decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
-                  >
-                    {person?.full_name}
-                  </Link>
-                }
-              />
-              <RecordField
-                label="Channel"
-                value={channelById(state, candidacy.channel_id)?.name}
-                empty="Not recorded."
-              />
-              <RecordField
-                label="Email"
-                value={person?.email}
-                empty="No email address is held. This person was sourced."
-              />
-              <RecordField label="Created" value={formatDate(candidacy.created_at)} />
-            </RecordFields>
-          </Section>
+          <p className="text-14 text-ink-muted border-rule mt-10 border-t pt-4">
+            {[
+              [person?.email, person?.phone].filter(Boolean).join(" · ") ||
+                "No email or phone on the record",
+              channelById(state, candidacy.channel_id)?.name,
+              `added ${formatDate(candidacy.created_at)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            {" · "}
+            <Link
+              href={`/prototype/people/${candidacy.person_id}`}
+              className="text-ink focus-visible:outline-ink underline decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+            >
+              Person record
+            </Link>
+          </p>
         </>
       ) : null}
 
@@ -465,10 +448,7 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
       ) : null}
 
       {tab === "messages" ? (
-        <Section
-          title="What this person has been told"
-          note="The same rows the candidate reads. There is no internal version of a message."
-        >
+        <Section title="What this person has been told" note="The candidate reads these same rows.">
           <div className="max-w-4xl">
             {messages.length === 0 ? (
               <p className="text-16 text-ink-secondary">Nothing has been sent.</p>
@@ -527,19 +507,13 @@ export function CandidacyScreen({ candidacyId }: { candidacyId: string }) {
       ) : null}
 
       {tab === "crosscheck" ? (
-        <Section
-          title="Crosscheck"
-          note="Observations drawn from records already held. Each one points at the artifact it came from. None is a judgement, and none is a probability."
-        >
+        <Section title="Crosscheck">
           <CrosscheckPanel signals={signals} />
         </Section>
       ) : null}
 
       {tab === "history" ? (
-        <Section
-          title="Activity"
-          note="Append-only. There is no control here to remove or amend an entry, because there is none in the database either."
-        >
+        <Section title="Activity">
           <ActivityList
             className="max-w-4xl"
             entries={eventsFor(state, candidacy.id).map((event) => ({

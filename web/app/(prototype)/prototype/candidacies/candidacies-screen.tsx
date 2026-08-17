@@ -32,6 +32,7 @@ import {
 } from "../../_state/selectors";
 import { CandidacyDrawer } from "../../candidacy-drawer";
 import { AboutButton, AboutPanel, useCockpitQuery } from "../../cockpit";
+import { PipelineBoard } from "../../pipeline-board";
 
 const FOCUS =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink";
@@ -64,6 +65,7 @@ export function CandidaciesScreen() {
   const selected = params.get("candidacy");
   const flaggedOnly = params.get("flagged") === "1";
   const stateFilter = params.get("state") ?? "all";
+  const view = params.get("view") === "board" ? "board" : "list";
 
   const [stageFilter, setStageFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
@@ -154,156 +156,247 @@ export function CandidaciesScreen() {
       </AboutPanel>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label>
-          <span className="sr-only">Stage</span>
-          <select
-            value={stageFilter}
-            onChange={(event) => setStageFilter(event.target.value)}
-            className={cn(SELECT, FOCUS)}
-          >
-            <option value="all">Any stage</option>
-            {labels.map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span className="sr-only">Channel</span>
-          <select
-            value={channelFilter}
-            onChange={(event) => setChannelFilter(event.target.value)}
-            className={cn(SELECT, FOCUS)}
-          >
-            <option value="all">Any channel</option>
-            {state.channels.map((channel) => (
-              <option key={channel.id} value={channel.name}>
-                {channel.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span className="sr-only">Record state</span>
-          <select
-            value={stateFilter}
-            onChange={(event) =>
-              setParam("state", event.target.value === "all" ? null : event.target.value)
-            }
-            className={cn(SELECT, FOCUS)}
-          >
-            <option value="all">Open and closed</option>
-            <option value="open">Open records</option>
-            <option value="closed">Closed records</option>
-          </select>
-        </label>
-
-        <button
-          type="button"
-          aria-pressed={flaggedOnly}
-          onClick={() => setParam("flagged", flaggedOnly ? null : "1")}
-          className={cn(
-            "rc-label rounded-rc border px-2 py-[4px] transition-colors",
-            flaggedOnly ? "border-ink text-ink" : "border-rule-control text-ink-muted",
-            FOCUS,
-          )}
+        <fieldset
+          className="border-rule-control rounded-rc mr-2 flex overflow-hidden border"
+          aria-label="View"
         >
-          {flaggedOnly ? "Needs attention · on" : "Needs attention"}
-        </button>
+          {(["list", "board"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              onClick={() => setParam("view", option === "list" ? null : option)}
+              className={cn(
+                "rc-label px-2 py-[4px] transition-colors",
+                view === option ? "bg-ink text-ink-inverse" : "text-ink-muted hover:text-ink",
+                FOCUS,
+              )}
+            >
+              {option === "list" ? "List" : "Board"}
+            </button>
+          ))}
+        </fieldset>
 
-        <label className="ml-auto flex items-center gap-2">
-          <span className="rc-label text-ink-muted">Sort</span>
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value as typeof sort)}
-            className={cn(SELECT, FOCUS)}
-          >
-            <option value="family">Family name</option>
-            <option value="stage">Stage</option>
-            <option value="closing">Days to auto-closure</option>
-            <option value="added">Date added</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-3 overflow-x-auto">
-        <div className="border-ink min-w-[1141px] border-t">
-          <div className={cn(GRID, "border-rule border-b py-[6px]")}>
-            <span />
-            <span className="rc-label text-ink-muted">Candidate</span>
-            <span className="rc-label text-ink-muted">Role</span>
-            <span className="rc-label text-ink-muted">Criteria, in Brief order</span>
-            <span className="rc-label text-ink-muted">Stage</span>
-            <span className="rc-label text-ink-muted">Attention</span>
-          </div>
-
-          {rows.map((candidacy) => {
-            const person = personById(state, candidacy.person_id);
-            const role = roleById(state, candidacy.role_id);
-            const flag = needsAttention(state, candidacy);
-            const isSelected = selected === candidacy.id;
-            const cells = cellsFor(state, candidacy).map((cell) => ({
-              label: cell.criterion.cell_label,
-              state: CELL_STATE[cell.state],
-            }));
-
-            return (
-              <button
-                key={candidacy.id}
-                type="button"
-                onClick={() => setParam("candidacy", isSelected ? null : candidacy.id)}
-                className={cn(
-                  GRID,
-                  "border-rule w-full cursor-pointer border-b py-[7px] text-left",
-                  isSelected ? "bg-paper-sunk" : "hover:bg-paper-sunk",
-                  FOCUS,
-                  "focus-visible:-outline-offset-2",
-                )}
+        {view === "list" ? (
+          <>
+            <label>
+              <span className="sr-only">Stage</span>
+              <select
+                value={stageFilter}
+                onChange={(event) => setStageFilter(event.target.value)}
+                className={cn(SELECT, FOCUS)}
               >
-                <span
-                  aria-hidden="true"
-                  className={cn("h-[19px] w-[3px]", isSelected ? "bg-ink" : "bg-transparent")}
-                />
-                <span className="min-w-0">
-                  <span
-                    className={cn(
-                      "text-16 block whitespace-nowrap",
-                      flag ? "text-ink" : "text-ink-secondary",
-                    )}
-                  >
-                    {person?.full_name}
-                  </span>
-                  <span className="text-14 text-ink-muted block truncate">
-                    {person?.current_employer}
-                  </span>
-                </span>
-                <span className="text-14 text-ink-secondary truncate">{role?.title}</span>
-                <CriteriaRow
-                  cells={cells}
-                  subject={person?.full_name ?? ""}
-                  size="sm"
-                  count="short"
-                />
-                <span className="text-14 text-ink-secondary truncate">
-                  {stageOf(state, candidacy)?.label}
-                </span>
-                {flag ? (
-                  <span className="rc-label text-ink">{flag.flag}</span>
-                ) : (
-                  <span className="text-14 text-ink-muted tabular whitespace-nowrap">
-                    {candidacy.closed_at !== null
-                      ? `Closed ${formatDateShort(candidacy.closed_at)}`
-                      : formatDateShort(candidacy.auto_close_at)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                <option value="all">Any stage</option>
+                {labels.map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="sr-only">Channel</span>
+              <select
+                value={channelFilter}
+                onChange={(event) => setChannelFilter(event.target.value)}
+                className={cn(SELECT, FOCUS)}
+              >
+                <option value="all">Any channel</option>
+                {state.channels.map((channel) => (
+                  <option key={channel.id} value={channel.name}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="sr-only">Record state</span>
+              <select
+                value={stateFilter}
+                onChange={(event) =>
+                  setParam("state", event.target.value === "all" ? null : event.target.value)
+                }
+                className={cn(SELECT, FOCUS)}
+              >
+                <option value="all">Open and closed</option>
+                <option value="open">Open records</option>
+                <option value="closed">Closed records</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              aria-pressed={flaggedOnly}
+              onClick={() => setParam("flagged", flaggedOnly ? null : "1")}
+              className={cn(
+                "rc-label rounded-rc border px-2 py-[4px] transition-colors",
+                flaggedOnly ? "border-ink text-ink" : "border-rule-control text-ink-muted",
+                FOCUS,
+              )}
+            >
+              {flaggedOnly ? "Needs attention · on" : "Needs attention"}
+            </button>
+
+            <label className="ml-auto flex items-center gap-2">
+              <span className="rc-label text-ink-muted">Sort</span>
+              <select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as typeof sort)}
+                className={cn(SELECT, FOCUS)}
+              >
+                <option value="family">Family name</option>
+                <option value="stage">Stage</option>
+                <option value="closing">Days to auto-closure</option>
+                <option value="added">Date added</option>
+              </select>
+            </label>
+          </>
+        ) : null}
       </div>
+
+      {view === "board" ? (
+        scopedRole?.pinned_brief_version_id ? (
+          <PipelineBoard
+            roleId={scopedRole.id}
+            selected={selected}
+            onSelect={(id) => setParam("candidacy", id)}
+          />
+        ) : (
+          <div className="mt-6 max-w-[70ch]">
+            <p className="text-16 text-ink">
+              {scopedRole
+                ? "This role is draft. The board is an open role's pipeline — open the role first."
+                : "The board is one role's pipeline. Choose the role."}
+            </p>
+            {!scopedRole ? (
+              <div className="mt-3 flex flex-wrap gap-3">
+                {state.roles
+                  .filter((role) => role.pinned_brief_version_id !== null)
+                  .map((role) => (
+                    <button
+                      key={role.id}
+                      type="button"
+                      onClick={() => {
+                        const next = new URLSearchParams(params.toString());
+                        next.set("role", role.id);
+                        next.set("view", "board");
+                        router.push(`/prototype/candidacies?${next.toString()}`);
+                      }}
+                      className={cn(
+                        "rc-label text-ink border-rule-control rounded-rc hover:bg-paper-sunk border px-2 py-[3px] transition-colors",
+                        FOCUS,
+                      )}
+                    >
+                      {role.title}
+                    </button>
+                  ))}
+              </div>
+            ) : null}
+          </div>
+        )
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <div className="border-ink min-w-[1141px] border-t">
+            <div className={cn(GRID, "border-rule border-b py-[6px]")}>
+              <span />
+              <span className="rc-label text-ink-muted">Candidate</span>
+              <span className="rc-label text-ink-muted">Role</span>
+              <span className="rc-label text-ink-muted">Criteria, in Brief order</span>
+              <span className="rc-label text-ink-muted">Stage</span>
+              <span className="rc-label text-ink-muted">Attention</span>
+            </div>
+
+            {rows.map((candidacy) => {
+              const person = personById(state, candidacy.person_id);
+              const role = roleById(state, candidacy.role_id);
+              const flag = needsAttention(state, candidacy);
+              const isSelected = selected === candidacy.id;
+              const cells = cellsFor(state, candidacy).map((cell) => ({
+                label: cell.criterion.cell_label,
+                state: CELL_STATE[cell.state],
+              }));
+
+              return (
+                <button
+                  key={candidacy.id}
+                  type="button"
+                  onClick={() => setParam("candidacy", isSelected ? null : candidacy.id)}
+                  className={cn(
+                    GRID,
+                    "border-rule w-full cursor-pointer border-b py-[7px] text-left",
+                    isSelected ? "bg-paper-sunk" : "hover:bg-paper-sunk",
+                    FOCUS,
+                    "focus-visible:-outline-offset-2",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn("h-[19px] w-[3px]", isSelected ? "bg-ink" : "bg-transparent")}
+                  />
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        "text-16 block whitespace-nowrap",
+                        flag ? "text-ink" : "text-ink-secondary",
+                      )}
+                    >
+                      {person?.full_name}
+                    </span>
+                    <span className="text-14 text-ink-muted block truncate">
+                      {person?.current_employer}
+                    </span>
+                  </span>
+                  <span className="text-14 text-ink-secondary truncate">{role?.title}</span>
+                  <CriteriaRow
+                    cells={cells}
+                    subject={person?.full_name ?? ""}
+                    size="sm"
+                    count="short"
+                  />
+                  <span className="text-14 text-ink-secondary truncate">
+                    {stageOf(state, candidacy)?.label}
+                  </span>
+                  {flag ? (
+                    <span className="rc-label text-ink">{flag.flag}</span>
+                  ) : (
+                    <span className="text-14 text-ink-muted tabular whitespace-nowrap">
+                      {candidacy.closed_at !== null
+                        ? `Closed ${formatDateShort(candidacy.closed_at)}`
+                        : formatDateShort(candidacy.auto_close_at)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {rows.length === 0 ? (
+              <div className="py-8">
+                <p className="text-16 text-ink-secondary">No records match.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStageFilter("all");
+                    setChannelFilter("all");
+                    const next = new URLSearchParams(params.toString());
+                    next.delete("flagged");
+                    next.delete("state");
+                    const search = next.toString();
+                    router.push(`/prototype/candidacies${search ? `?${search}` : ""}`);
+                  }}
+                  className={cn(
+                    "rc-label text-ink border-rule-control rounded-rc hover:bg-paper-sunk mt-3 border px-2 py-[3px] transition-colors",
+                    FOCUS,
+                  )}
+                >
+                  Clear the filters
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {selected ? (
         <CandidacyDrawer candidacyId={selected} onClose={() => setParam("candidacy", null)} />

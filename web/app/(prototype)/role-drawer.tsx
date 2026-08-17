@@ -18,6 +18,7 @@ import { usePrototype } from "./_state/provider";
 import { type Refusal as RefusalShape, refuseOpenRole } from "./_state/refusals";
 import {
   candidaciesForRole,
+  channelsForRole,
   clientById,
   criteriaFor,
   roleAttention,
@@ -52,6 +53,7 @@ export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () =>
   const criteria = version ? criteriaFor(state, version.id) : [];
   const stages = version ? stagesFor(state, version.id) : [];
   const held = candidaciesForRole(state, role.id);
+  const channels = channelsForRole(state, role);
   const flag = roleAttention(state, role);
   const draft = role.state === "draft";
 
@@ -202,6 +204,35 @@ export function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () =>
             ))}
           </ul>
         </section>
+
+        {channels.length > 0 ? (
+          /* Counts, never rates — they judge the desk's channels, not a person. */
+          <section className="px-[18px] py-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_64px_76px_76px] items-baseline gap-x-2">
+              <p className="rc-label text-ink-muted">Channels</p>
+              <p className="rc-label text-ink-muted text-right">Added</p>
+              <p className="rc-label text-ink-muted text-right">Screened</p>
+              <p className="rc-label text-ink-muted text-right">Submitted</p>
+            </div>
+            <ul className="mt-1">
+              {channels.map((row) => (
+                <li
+                  key={row.channel.id}
+                  className="border-rule grid grid-cols-[minmax(0,1fr)_64px_76px_76px] items-baseline gap-x-2 border-b py-2"
+                >
+                  <span className="text-16 text-ink-secondary truncate">{row.channel.name}</span>
+                  <span className="text-14 text-ink-muted tabular text-right">{row.added}</span>
+                  <span className="text-14 text-ink-muted tabular text-right">
+                    {row.reachedScreening}
+                  </span>
+                  <span className="text-14 text-ink-muted tabular text-right">
+                    {row.reachedSubmitted}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <div className="px-[18px] py-3">
           <StateMarker
