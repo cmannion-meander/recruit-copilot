@@ -267,6 +267,122 @@ def test_cannot_advance_with_incomplete_scorecard(review_missing_two_findings):
 
 
 @pytest.mark.django_db
+def test_advance_succeeds_once_the_scorecard_is_complete(organization, person):
+    """
+    The ordinary path, deliberately (docs/prototype-findings.md §15): nine prototype
+    screens were once built against invariant 3 without anyone noticing it refused
+    every first transition, because every fixture candidacy was already deep in the
+    pipeline — nothing exercised the ordinary route. This proves the gate just wired up
+    in M5 (candidacies.services.advance_stage, reviews.services.require_stage_complete)
+    admits the real thing and not only its own refusals: both an evidenced finding
+    (through the full Evidence-creation path, offsets and all) and a not_found one
+    satisfy coverage, and a fully-covered stage actually lets go.
+    """
+    from django.db import transaction
+
+    from candidacies.services import advance_stage, create_candidacy, send_stage_message
+    from channels.models import Channel
+    from clients.models import Client
+    from findings.services import Passage, record_finding
+    from organizations.models import User
+    from roles.models import Brief, BriefStage, BriefStageCriterion, BriefVersion, Criterion, Role
+
+    stage_message = (
+        "You reached the screening call. If nothing has been decided within ninety "
+        "days this closes on its own and you will be told that it has closed."
+    )
+
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT set_config('app.current_org', %s, true)", [str(organization.id)])
+
+        user = User.objects.create(username="advance-ordinary-path", organization=organization)
+        client = Client.objects.create(organization=organization, name="Two-Stage Client")
+        role = Role.objects.create(organization=organization, client=client, title="Two-Stage Role")
+        brief = Brief.objects.create(organization=organization, role=role)
+        version = BriefVersion.objects.create(
+            organization=organization, brief=brief, version=1, created_by=user
+        )
+        criteria = [
+            Criterion.objects.create(
+                organization=organization,
+                brief_version=version,
+                position=i + 1,
+                text=text,
+            )
+            for i, text in enumerate(
+                [
+                    "Led an ERP migration, not only participated in one",
+                    "Has managed a team of three or more",
+                    "Built a rolling forecast from site-level data",
+                ]
+            )
+        ]
+        stage_one = BriefStage.objects.create(
+            organization=organization,
+            brief_version=version,
+            position=1,
+            label="Screening call",
+            owner=BriefStage.Owner.RECRUITER,
+            candidate_message=stage_message,
+        )
+        stage_two = BriefStage.objects.create(
+            organization=organization,
+            brief_version=version,
+            position=2,
+            label="Competency call",
+            owner=BriefStage.Owner.RECRUITER,
+            candidate_message=stage_message,
+        )
+        for criterion_row in criteria:
+            BriefStageCriterion.objects.create(
+                organization=organization,
+                brief_version=version,
+                brief_stage=stage_one,
+                criterion=criterion_row,
+            )
+        role.open()
+
+        channel = Channel.objects.create(
+            organization=organization, name="Referral", kind=Channel.Kind.REFERRAL
+        )
+        candidacy = create_candidacy(role, person, channel, actor=user)
+
+        sighting = person.sightings.first()
+        record_finding(
+            candidacy,
+            stage=stage_one,
+            criterion=criteria[0],
+            status="evidenced",
+            passage=Passage(
+                char_start=0,
+                char_end=min(20, len(sighting.snapshot_excerpt)),
+                sighting=sighting,
+            ),
+            actor=user,
+        )
+        record_finding(
+            candidacy, stage=stage_one, criterion=criteria[1], status="not_found", actor=user
+        )
+        record_finding(
+            candidacy, stage=stage_one, criterion=criteria[2], status="not_found", actor=user
+        )
+
+        send_stage_message(candidacy, stage_one, actor=user)
+        advance_stage(candidacy, actor=user)
+
+        candidacy.refresh_from_db()
+        assert candidacy.brief_stage_id == stage_two.id
+        assert (
+            candidacy.reviews.get(brief_stage=stage_one)
+            .findings.filter(status="evidenced")
+            .get()
+            .evidence.quote
+            == sighting.snapshot_excerpt[:20]
+        )
+
+
+@pytest.mark.django_db
 def test_rejection_requires_reason_code_and_text(candidacy):
     from django.db.utils import IntegrityError
 
@@ -279,6 +395,7 @@ def test_rejection_requires_reason_code_and_text(candidacy):
 @pytest.mark.django_db
 def test_evidenced_finding_requires_evidence(review, criterion):
     from django.db.utils import IntegrityError
+
     from findings.models import Finding
 
     with pytest.raises(IntegrityError):
@@ -448,6 +565,7 @@ def test_sighting_requires_a_source_and_a_retrieval_time(person):
 def test_evidence_points_at_a_document_or_a_sighting(review, criterion):
     """Never at nothing. A finding beside no quoted passage is the thing we do not ship."""
     from django.db.utils import IntegrityError
+
     from evidence.models import Evidence
 
     with pytest.raises(IntegrityError):

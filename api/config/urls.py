@@ -1,6 +1,8 @@
 from django.urls import path
 
 from candidacies import views as candidacy_views
+from documents import views as document_views
+from findings import views as finding_views
 from organizations import views as organization_views
 from people import views as people_views
 from roles import views as role_views
@@ -17,4 +19,6 @@ urlpatterns = [
     path("api/candidacies/<uuid:candidacy_id>/extend", candidacy_views.extend_auto_close_view),
     path("api/candidacies/<uuid:candidacy_id>/reject", candidacy_views.reject_candidacy_view),
     path("api/candidacies/<uuid:candidacy_id>/messages", candidacy_views.send_stage_message_view),
+    path("api/candidacies/<uuid:candidacy_id>/findings", finding_views.record_finding_view),
+    path("api/people/<uuid:person_id>/documents", document_views.upload_document_view),
 ]

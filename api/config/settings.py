@@ -70,6 +70,10 @@ INSTALLED_APPS = [
     "channels",
     "candidacies",
     "decisions",
+    "documents",
+    "reviews",
+    "evidence",
+    "findings",
 ]
 
 MIDDLEWARE = [
@@ -104,3 +108,8 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Storage API only — never an open() on a path in the document pipeline (CLAUDE.md rule
+# 1). Local disk in dev, Azure Blob in prod (a STORAGES backend swap, not a code change).
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media"))
+MEDIA_URL = "/media/"

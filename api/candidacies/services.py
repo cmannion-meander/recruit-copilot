@@ -104,16 +104,19 @@ def send_stage_message(candidacy, stage, *, actor):
 
 def advance_stage(candidacy, *, actor):
     """Invariant 3, then invariant 6. The scorecard-coverage half of invariant 3 —
-    every criterion this stage carries has a Finding — lands in M5 with Review and
-    Finding; it belongs here, checked before the message gate, and its absence is
-    tracked rather than silent (docs/backend-prd.md, M4 done-state).
+    every criterion this stage carries has a Finding — is reviews.services
+    .require_stage_complete, the same check Review.advance() runs directly; a stage
+    with criteria but no Review at all (no finding was ever recorded there) is zero
+    coverage, not a pass.
     """
     _refuse_if_closed(candidacy, invariant=3)
     current_stage = candidacy.brief_stage
 
-    # TODO(M5): require every criterion in current_stage.criterion_ids to carry a
-    # Finding on this candidacy, raising CandidacyRefused(invariant=3) naming the ones
-    # with no entry — before the invariant 6 check below, matching refuseAdvance's order.
+    from reviews.models import Review
+    from reviews.services import require_stage_complete
+
+    review = Review.objects.filter(candidacy=candidacy, brief_stage=current_stage).first()
+    require_stage_complete(current_stage, review)
 
     if not candidacy.messages.filter(
         kind=CandidateMessage.Kind.STAGE, brief_stage=current_stage

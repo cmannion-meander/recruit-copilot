@@ -18,8 +18,10 @@ from django.utils import timezone
 from candidacies.services import create_candidacy
 from channels.models import Channel
 from clients.models import Client
+from findings.models import Finding
 from organizations.models import Organization, User
 from people.models import Person
+from reviews.models import Review
 from roles.models import (
     Brief,
     BriefStage,
@@ -36,6 +38,8 @@ CRITERIA = [
     "Led an ERP migration, not only participated in one",
     "Has managed a team of three or more",
     "Built a rolling forecast from site-level data",
+    "Owns the monthly close process end to end",
+    "Has presented to a board or an investment committee",
 ]
 
 STAGE_MESSAGE = (
@@ -221,3 +225,64 @@ def search(organization):
             coverage_note="March run, scope revision 1.",
         )
     return search
+
+
+@pytest.fixture
+def review(organization, person):
+    """A Review pinned to a real BriefVersion and BriefStage, via a real candidacy."""
+    with transaction.atomic():
+        set_org_context(organization)
+        role = build_role(organization, n_criteria=3, assigned=3, title="Reviewed Role")
+        role.open()
+        user = role.brief.versions.first().created_by
+        channel = Channel.objects.create(
+            organization=organization, name="Referral", kind=Channel.Kind.REFERRAL
+        )
+        candidacy = create_candidacy(role, person, channel, actor=user)
+        rv = Review.objects.create(
+            candidacy=candidacy,
+            brief_version=candidacy.brief_version,
+            brief_stage=candidacy.brief_stage,
+            created_by=user,
+        )
+    return rv
+
+
+@pytest.fixture
+def criterion(review):
+    """One of the review's own stage's criteria — same organization, same version."""
+    return review.brief_stage.criterion_assignments.select_related("criterion").first().criterion
+
+
+@pytest.fixture
+def review_missing_two_findings(organization, person):
+    """A review whose stage carries five criteria, three of them read — two with no
+    entry, which is what test_cannot_advance_with_incomplete_scorecard needs to name."""
+    with transaction.atomic():
+        set_org_context(organization)
+        role = build_role(organization, n_criteria=5, assigned=5, title="Partly Reviewed Role")
+        role.open()
+        user = role.brief.versions.first().created_by
+        channel = Channel.objects.create(
+            organization=organization, name="Referral", kind=Channel.Kind.REFERRAL
+        )
+        candidacy = create_candidacy(role, person, channel, actor=user)
+        rv = Review.objects.create(
+            candidacy=candidacy,
+            brief_version=candidacy.brief_version,
+            brief_stage=candidacy.brief_stage,
+            created_by=user,
+        )
+        assignments = list(
+            candidacy.brief_stage.criterion_assignments.select_related("criterion").order_by(
+                "criterion__position"
+            )
+        )
+        for assignment in assignments[:3]:
+            Finding.objects.create(
+                review=rv,
+                criterion=assignment.criterion,
+                status=Finding.Status.NOT_FOUND,
+                recorded_by=user,
+            )
+    return rv

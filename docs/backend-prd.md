@@ -164,10 +164,14 @@ Five deliberate deltas from the TypeScript:
    on `kind`. They are deliberately different types (prototype finding 6), and the decision
    about whether `document_property` and `record` artifacts can ever ship is ADR-owed before
    slice 9, not resolved silently in a migration.
-4. **`Finding` and `Evidence` reconcile with the contract test.** The test expects creating
-   an evidenced finding with no evidence to raise. Evidence remains its own append-only table
-   (the permission revokes apply to it); a constraint trigger enforces evidenced ⇒ an
-   evidence row exists in the same transaction.
+4. **`Evidence` is scoped to `(review, criterion)`, not to a finding — ADR 0016.** The
+   contract tests require `Finding` to accept `evidence` as a forward field and `Evidence`
+   to accept `review`/`criterion` directly; a `finding_id`-on-Evidence shape (the prototype's
+   literal types) cannot satisfy either as an ORM `.create()` call. `Finding.evidence` is a
+   nullable one-to-one, with a composite foreign key on `(evidence_id, review_id,
+   criterion_id)` guaranteeing the two never disagree. Evidence stays its own append-only
+   table (the permission revokes apply to it); evidenced ⇒ evidence exists is a same-row
+   `CHECK`, no trigger needed.
 5. **Column names are constrained by the catalogue scans.** No column anywhere may match
    `score|rank|rating|confidence|percentile|weight`, and nothing key-shaped may exist except
    `*_ref`. This binds innocent names too — `weighting` on a shipping table would fail the
