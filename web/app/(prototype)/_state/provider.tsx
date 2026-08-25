@@ -22,13 +22,17 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from "react";
-import { dispatchToApi, fetchSession, fetchWorkspace, login, primeCsrf } from "./api";
+import { Control } from "@/components/control";
+import { Refusal } from "@/components/refusal";
+import { cn } from "@/lib/utils";
+import { dispatchToApi, fetchSession, fetchWorkspace, login, logout, primeCsrf } from "./api";
 import { reducer } from "./reducer";
 import type { Action, State } from "./types";
 
-type Store = { state: State; dispatch: (action: Action) => void };
+type Store = { state: State; dispatch: (action: Action) => void; signOut: () => void };
 
 const PrototypeContext = createContext<Store | null>(null);
 
@@ -106,23 +110,60 @@ export function PrototypeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const signOut = useCallback(() => {
+    localDispatch({ type: "__hydrate", payload: EMPTY_STATE });
+    setAuthed(false);
+    logout()
+      .catch((error) => console.error("Sign-out did not reach the server:", error))
+      .then(() => primeCsrf()); // the next login form's first POST needs a fresh csrftoken cookie
+  }, []);
+
+  // The server round trip for one dispatch — call, then refetch, then hydrate — has to
+  // finish before the next one starts, or two in-flight commands' hydrates can resolve
+  // out of order and the earlier one's stale read overwrites the later one's fresher
+  // state. That looked, from a click, like "advance" doing nothing the first time: the
+  // click landed and the server accepted it, but a slower-resolving refetch from the
+  // previous command arrived after and quietly reverted the screen. queueRef chains
+  // every command's server work onto the last one's, so they always resolve in the
+  // order the user issued them — the local optimistic update below stays instant either
+  // way, since only the server sync is serialized.
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const [pending, setPending] = useState(0);
+
   const dispatch = useCallback(
     (action: Action) => {
+      if (action.type === "reset") {
+        // Repurposed for the wired cockpit: "reset" meant "revert to fixtures," which
+        // is not a thing this screen can honestly offer once it holds real rows — that
+        // would read as data loss on a database-backed screen. Re-sync with the server
+        // instead. See prototype-bar.tsx, where the button is labelled to match.
+        setPending((n) => n + 1);
+        queueRef.current = queueRef.current
+          .then(() => fetchWorkspace())
+          .then((workspace) => localDispatch({ type: "__hydrate", payload: workspace }))
+          .finally(() => setPending((n) => n - 1));
+        return;
+      }
+
       localDispatch(action); // instant, optimistic — the reducer's own refusal checks apply
-      if (action.type === "reset" || action.type === "__hydrate") return;
-      dispatchToApi(action, state)
+      if (action.type === "__hydrate") return;
+
+      setPending((n) => n + 1);
+      queueRef.current = queueRef.current
+        .then(() => dispatchToApi(action, state))
         .catch((error) => {
           // A server-side refusal here means the local check and the server disagreed —
           // reconciling to server truth below is the safe response either way.
           console.error("Command did not persist:", error);
         })
         .then(() => fetchWorkspace())
-        .then((workspace) => localDispatch({ type: "__hydrate", payload: workspace }));
+        .then((workspace) => localDispatch({ type: "__hydrate", payload: workspace }))
+        .finally(() => setPending((n) => n - 1));
     },
     [state],
   );
 
-  const store = useMemo(() => ({ state, dispatch }), [state, dispatch]);
+  const store = useMemo(() => ({ state, dispatch, signOut }), [state, dispatch, signOut]);
 
   if (!ready) {
     return (
@@ -136,8 +177,23 @@ export function PrototypeProvider({ children }: { children: React.ReactNode }) {
     return <LoginGate onSubmit={handleLogin} error={authError} pending={signingIn} />;
   }
 
-  return <PrototypeContext.Provider value={store}>{children}</PrototypeContext.Provider>;
+  return (
+    <PrototypeContext.Provider value={store}>
+      {/* The one honest use of "busy" (components/control.tsx): not a spinner, not a
+       * toast — a thin ink bar, the same vocabulary the rest of the product already
+       * uses for "something is happening," pinned above everything so a click always
+       * gets an answer even before the server has one. */}
+      {pending > 0 ? (
+        <div aria-hidden="true" className="bg-ink fixed inset-x-0 top-0 z-50 h-[2px]" />
+      ) : null}
+      {children}
+    </PrototypeContext.Provider>
+  );
 }
+
+const INPUT =
+  "border-rule-control rounded-rc w-full border bg-transparent px-1.5 py-[5px] text-16 " +
+  "focus-visible:outline-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 
 function LoginGate({
   onSubmit,
@@ -151,14 +207,16 @@ function LoginGate({
   return (
     <div className="bg-paper flex h-screen items-center justify-center">
       <form
-        className="border-rule w-[320px] border p-6"
+        className="w-[320px]"
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
           onSubmit(String(form.get("username") ?? ""), String(form.get("password") ?? ""));
         }}
       >
-        <p className="rc-label text-ink-muted mb-4">RECRUIT COPILOT</p>
+        <p className="rc-label text-ink-muted mb-1">RECRUIT COPILOT</p>
+        <h1 className="text-22 text-ink mb-6 font-medium tracking-[-.01em]">Sign in</h1>
+
         <label className="text-14 text-ink-secondary mb-1 block" htmlFor="username">
           Username
         </label>
@@ -166,8 +224,9 @@ function LoginGate({
           id="username"
           name="username"
           autoComplete="username"
-          className="border-rule-control rounded-rc mb-3 w-full border px-2 py-1.5 text-16"
+          className={cn(INPUT, "mb-4")}
         />
+
         <label className="text-14 text-ink-secondary mb-1 block" htmlFor="password">
           Password
         </label>
@@ -176,16 +235,21 @@ function LoginGate({
           name="password"
           type="password"
           autoComplete="current-password"
-          className="border-rule-control rounded-rc mb-3 w-full border px-2 py-1.5 text-16"
+          className={cn(INPUT, "mb-6")}
         />
-        {error ? <p className="text-14 mb-3 text-open">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={pending}
-          className="border-rule-control rounded-rc w-full border px-2 py-1.5 text-16"
-        >
+
+        {error ? (
+          <Refusal
+            className="mb-6 px-4 py-4"
+            requirement="Sign-in needs a username and password that match a real account."
+            reason={error}
+            action="Check the username and password, then try again."
+          />
+        ) : null}
+
+        <Control type="submit" disabled={pending} className="w-full">
           {pending ? "Signing in…" : "Sign in"}
-        </button>
+        </Control>
       </form>
     </div>
   );

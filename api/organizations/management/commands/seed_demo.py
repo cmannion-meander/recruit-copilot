@@ -122,6 +122,11 @@ class Command(BaseCommand):
                 return person
 
             def build_role(client, title, *, criteria_text, stages):
+                """criteria_text is a list of (text, cell_label) pairs. cell_label is the
+                short form CriteriaRow keys its cells by (components/criteria-row.tsx) —
+                it has to be non-empty and distinct within one role's own criteria, or
+                every cell in every row sharing this brief version collides on the same
+                React key."""
                 role = Role.objects.create(organization=org, client=client, title=title)
                 brief = Brief.objects.create(organization=org, role=role)
                 version = BriefVersion.objects.create(
@@ -129,9 +134,13 @@ class Command(BaseCommand):
                 )
                 criteria = [
                     Criterion.objects.create(
-                        organization=org, brief_version=version, position=i + 1, text=text
+                        organization=org,
+                        brief_version=version,
+                        position=i + 1,
+                        text=text,
+                        cell_label=cell_label,
                     )
-                    for i, text in enumerate(criteria_text)
+                    for i, (text, cell_label) in enumerate(criteria_text)
                 ]
                 for position, (label, criterion_indices) in enumerate(stages, start=1):
                     stage = BriefStage.objects.create(
@@ -162,9 +171,9 @@ class Command(BaseCommand):
                 bramhall,
                 "Financial Controller",
                 criteria_text=[
-                    "Led an ERP migration, not only participated in one",
-                    "Has managed a team of three or more",
-                    "Built a rolling forecast from site-level data",
+                    ("Led an ERP migration, not only participated in one", "ERP migration"),
+                    ("Has managed a team of three or more", "Team of 3+"),
+                    ("Built a rolling forecast from site-level data", "Rolling forecast"),
                 ],
                 stages=[("Screening call", [0, 1]), ("Competency call", [2])],
             )
@@ -317,9 +326,9 @@ class Command(BaseCommand):
                 calder_vale,
                 "Finance Business Partner",
                 criteria_text=[
-                    "Owns the monthly close process end to end",
-                    "Has presented to a board or an investment committee",
-                    "Built a rolling forecast from site-level data",
+                    ("Owns the monthly close process end to end", "Monthly close"),
+                    ("Has presented to a board or an investment committee", "Board presentation"),
+                    ("Built a rolling forecast from site-level data", "Rolling forecast"),
                 ],
                 stages=[("Screening call", [0, 1, 2])],
             )
@@ -399,8 +408,8 @@ class Command(BaseCommand):
                 calder_vale,
                 "Management Accountant",
                 criteria_text=[
-                    "Owns the monthly close process end to end",
-                    "Has managed a team of three or more",
+                    ("Owns the monthly close process end to end", "Monthly close"),
+                    ("Has managed a team of three or more", "Team of 3+"),
                 ],
                 stages=[("Screening call", [0, 1])],
             )

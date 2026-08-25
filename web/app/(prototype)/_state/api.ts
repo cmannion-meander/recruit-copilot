@@ -61,6 +61,10 @@ export async function login(username: string, password: string): Promise<Session
   return res.json();
 }
 
+export async function logout(): Promise<void> {
+  await request("/api/session", { method: "DELETE" });
+}
+
 export async function fetchWorkspace(): Promise<PrototypeState> {
   const res = await request("/api/workspace");
   if (!res.ok) throw new Error(`GET /api/workspace failed: ${res.status}`);

@@ -51,7 +51,7 @@ const FOCUS =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink";
 
 export function Cockpit({ view, children }: { view: CockpitView; children: React.ReactNode }) {
-  const { state } = usePrototype();
+  const { state, signOut } = usePrototype();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -154,6 +154,16 @@ export function Cockpit({ view, children }: { view: CockpitView; children: React
               )}
             />
             <p className="text-14 text-ink-muted whitespace-nowrap">{state.users[0]?.name}</p>
+            <button
+              type="button"
+              onClick={signOut}
+              className={cn(
+                "rc-label text-ink-muted hover:text-ink whitespace-nowrap transition-colors",
+                FOCUS,
+              )}
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
