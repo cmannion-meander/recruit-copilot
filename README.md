@@ -76,6 +76,7 @@ docs/invariants.md     the ten invariants and how each is enforced
 docs/data-model.md     entities and the rules that are painful to retrofit
 docs/slices.md         build order, slices 0–11, with 2–5 specified
 docs/deployment.md     App Service notes and the gotchas that cost an evening
+docs/demo-script.md    the walkthrough this build renders, beat by beat
 brand/tokens.css       colour and type — source of truth, also pasted into v0
 web/                   the Next 15 app: marketing routes static, /prototype the cockpit
 web/app/(prototype)/_state/api.ts   the one file that knows the Django backend exists
@@ -105,15 +106,20 @@ Code comments cite ADRs by number. A citation you cannot follow — 0002 through
 telling you the decision was deliberate and specific to our deployment, not that a file is
 missing.
 
-## What is deliberately not here yet
+## Status, and what is deliberately not here yet
 
-No Bicep, no CI beyond lint and test. The landing page goes to production in slice 0 and
-nothing else does — the build runs locally until slice 4, where the LLM service boundary and
-bring-your-own-key handling land together, because a key belongs behind a boundary from its
-first use rather than after one.
+The backend is built: M0 through M7 (`docs/backend-prd.md`) are done, `api/` is a full Django
+project, `api/tests/test_invariants.py` passes in full against `rcp_app`, and `/prototype`
+reads and writes real Postgres rows through the API — not an in-memory reducer.
 
-The Django project, the models, the RLS middleware and the frontend are all absent on
-purpose — those are the build, and they get written on camera.
+Two slices stay out on purpose. Slice 4, the LLM service boundary and bring-your-own-key
+handling — a key belongs behind a boundary from its first use, not added after one — and
+slice 11, metering and Stripe. See `docs/slices.md`. Nothing in the shipped build calls a
+model provider or stores a customer key; both are asserted by the invariant suite
+(`test_no_customer_key_material_column_exists`), not left to convention.
+
+No Bicep, no CI beyond lint and test, no Docker. The build runs entirely locally; see
+`docs/deployment.md` for what a production checkout would need instead of this one.
 
 ---
 

@@ -24,6 +24,11 @@ token view — all running on an in-memory reducer with no network and no persis
 models that do not exist; they are the definition of done, and the build plan below states
 which of them go green at each milestone.
 
+**Status: this plan is complete.** M0 through M7 below all shipped; `api/` is a full Django
+project and `uv run pytest tests/test_invariants.py` passes in full against `rcp_app`. The
+two paragraphs above describe the state this document was written against, kept as written
+because the milestones below were scoped from it.
+
 ---
 
 ## Goal
