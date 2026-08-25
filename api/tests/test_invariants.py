@@ -74,9 +74,19 @@ def test_every_tenant_table_has_rls_enabled_and_forced():
     assert not offenders, f"RLS not enabled and forced on: {offenders}"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_cross_tenant_read_returns_nothing(two_orgs_with_data):
-    """The promise we cannot be caught wrong on."""
+    """
+    The promise we cannot be caught wrong on.
+
+    transaction=True, not the default rollback-wrapped `django_db`: without it, the
+    fixture's writes live inside one uncommitted transaction on Django's own connection,
+    invisible to the separate raw connection this test opens — Postgres MVCC hides
+    another session's uncommitted rows regardless of RLS. The assertion below would read
+    `[]` whether or not the policy does anything at all. See
+    test_same_org_read_returns_rows, the positive control that rules this out for the
+    same-org case; this is the cross-tenant half of the same fix.
+    """
     org_a, org_b = two_orgs_with_data
     with psycopg.connect(APP_DSN) as conn, conn.transaction():
         # set_config(..., true) is SET LOCAL in function form — a utility statement
@@ -88,9 +98,11 @@ def test_cross_tenant_read_returns_nothing(two_orgs_with_data):
     assert rows == [], "cross-tenant read returned rows"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_missing_org_context_returns_nothing(two_orgs_with_data):
-    """No org context set must fail closed, not open."""
+    """No org context set must fail closed, not open. transaction=True for the same
+    reason as test_cross_tenant_read_returns_nothing — the row must genuinely exist and
+    be committed for its absence from this query to mean anything."""
     with psycopg.connect(APP_DSN) as conn:
         rows = conn.execute("SELECT id FROM person").fetchall()
     assert rows == [], "queries without org context are not failing closed"
@@ -214,8 +226,9 @@ def test_role_opens_and_pins_the_brief_version(role_ready_to_open):
 
 @pytest.mark.django_db
 def test_candidacy_cannot_attach_to_unopened_role(draft_role, person):
-    from candidacies.models import Candidacy
     from django.db.utils import IntegrityError
+
+    from candidacies.models import Candidacy
 
     with pytest.raises(IntegrityError):
         Candidacy.objects.create(role=draft_role, person=person)
@@ -255,8 +268,9 @@ def test_cannot_advance_with_incomplete_scorecard(review_missing_two_findings):
 
 @pytest.mark.django_db
 def test_rejection_requires_reason_code_and_text(candidacy):
-    from decisions.models import Decision
     from django.db.utils import IntegrityError
+
+    from decisions.models import Decision
 
     with pytest.raises(IntegrityError):
         Decision.objects.create(candidacy=candidacy, kind="reject", reason_text="")
@@ -290,6 +304,70 @@ def test_submission_blocked_while_crosscheck_signal_unresolved(candidacy_with_op
 @pytest.mark.django_db
 def test_every_candidacy_has_an_auto_close_deadline(candidacy):
     assert candidacy.auto_close_at is not None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_auto_close_at_cannot_move_without_a_message(candidacy):
+    """
+    ADR 0012: the deadline moves only in the same act that tells the candidate
+    something. A bare UPDATE — the shape a quiet, undocumented extension would take — is
+    refused. The check is deferred to commit (docs/backend-prd.md's enforcement map), so
+    this needs a real transaction to observe it firing at all.
+
+    The `candidacy` fixture's own transaction already committed by the time this test
+    body runs, which clears the LOCAL org GUC it set — org context has to be
+    re-established here, in the same transaction as the UPDATE, or the row is simply
+    invisible under RLS and the UPDATE matches nothing (no error, no proof of anything).
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.db.utils import IntegrityError
+
+    from candidacies.models import Candidacy
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('app.current_org', %s, true)",
+                [str(candidacy.organization_id)],
+            )
+        Candidacy.objects.filter(pk=candidacy.pk).update(
+            auto_close_at=candidacy.auto_close_at + timedelta(days=30)
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_extension_moves_the_deadline_with_its_message(candidacy):
+    """
+    The ordinary path, deliberately (docs/prototype-findings.md §15): a trigger proven
+    only by its refusal tests is a trigger nobody has shown admits the real thing. An
+    extension is itself the message (ADR 0012, item 2), landing in one transaction with
+    the deadline it moves — one atomic() block here, org context set fresh at the top,
+    for the same reason as the refusal test above.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+
+    from candidacies.services import extend_auto_close
+
+    old_deadline = candidacy.auto_close_at
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('app.current_org', %s, true)",
+                [str(candidacy.organization_id)],
+            )
+        actor = candidacy.role.brief.versions.first().created_by
+        extend_auto_close(
+            candidacy,
+            message_text="The client is running slow after the final interview.",
+            actor=actor,
+        )
+        candidacy.refresh_from_db()
+        assert candidacy.auto_close_at == old_deadline + timedelta(days=30)
+        assert candidacy.messages.filter(kind="extension").exists()
 
 
 @pytest.mark.django_db

@@ -3,10 +3,16 @@ resolving sighting (invariant 9).
 
 The provenance trigger is INITIALLY IMMEDIATE, so a bare insert refuses at the statement.
 The legitimate path defers it: the person row goes in before its sighting, and the check
-runs at commit — the promise is kept by the transaction, not by statement order.
+runs at commit — the promise is kept by the transaction, not by statement order. That
+requires SET CONSTRAINTS and both writes to share one transaction; each function wraps
+its own body in transaction.atomic() rather than depending on a caller to provide one —
+in production that caller is OrgContextMiddleware, which already wraps the request, so
+this nests as a harmless savepoint there. Without it here, a caller with no open
+transaction (autocommit) would have each statement commit separately, the deferral would
+never span the Person insert, and the trigger would refuse it immediately.
 """
 
-from django.db import connection
+from django.db import connection, transaction
 from django.utils import timezone
 
 from common.refusals import Refusal, RefusalItem
@@ -42,16 +48,17 @@ def create_person_from_sighting(
             action="Write the name as the source shows it.",
             invariant=9,
         )
-    _defer_provenance()
-    person = Person.objects.create(
-        organization=sighting.organization,
-        full_name=full_name.strip(),
-        headline=headline.strip(),
-        current_employer=current_employer.strip(),
-        location=location.strip(),
-    )
-    sighting.person = person
-    sighting.save(update_fields=["person"])
+    with transaction.atomic():
+        _defer_provenance()
+        person = Person.objects.create(
+            organization=sighting.organization,
+            full_name=full_name.strip(),
+            headline=headline.strip(),
+            current_employer=current_employer.strip(),
+            location=location.strip(),
+        )
+        sighting.person = person
+        sighting.save(update_fields=["person"])
     return person
 
 
@@ -87,22 +94,23 @@ def create_person_by_hand(
             items=tuple(missing),
             invariant=9,
         )
-    _defer_provenance()
-    person = Person.objects.create(
-        organization=organization,
-        full_name=full_name.strip(),
-        headline=headline.strip(),
-        current_employer=current_employer.strip(),
-        location=location.strip(),
-    )
-    Sighting.objects.create(
-        organization=organization,
-        person=person,
-        source_url=source_url.strip(),
-        source_name=source_name.strip(),
-        source_kind="manual",
-        retrieved_at=timezone.now(),
-        snapshot_excerpt=snapshot_excerpt.strip(),
-        resolving=True,
-    )
+    with transaction.atomic():
+        _defer_provenance()
+        person = Person.objects.create(
+            organization=organization,
+            full_name=full_name.strip(),
+            headline=headline.strip(),
+            current_employer=current_employer.strip(),
+            location=location.strip(),
+        )
+        Sighting.objects.create(
+            organization=organization,
+            person=person,
+            source_url=source_url.strip(),
+            source_name=source_name.strip(),
+            source_kind="manual",
+            retrieved_at=timezone.now(),
+            snapshot_excerpt=snapshot_excerpt.strip(),
+            resolving=True,
+        )
     return person

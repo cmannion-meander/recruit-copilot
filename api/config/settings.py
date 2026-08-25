@@ -67,6 +67,9 @@ INSTALLED_APPS = [
     "people",
     "searches",
     "sightings",
+    "channels",
+    "candidacies",
+    "decisions",
 ]
 
 MIDDLEWARE = [
