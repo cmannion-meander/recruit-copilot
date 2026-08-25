@@ -23,6 +23,14 @@ try {
 const canonicalHost = process.env.CANONICAL_HOST;
 const redirectHost = process.env.REDIRECT_HOST;
 
+// Local dev only, and deliberately a rewrite rather than CORS. Auth is a session
+// cookie, not a bearer token (CLAUDE.md: no JWT) — a rewrite makes every request to
+// Django same-origin from the browser's point of view, so the cookie just goes along
+// for free and there is no CORS-with-credentials configuration to get wrong. Django's
+// own address is an env var like everything else; it has no default in production,
+// where the API is deployed and reached some other way.
+const apiOrigin = process.env.DJANGO_API_ORIGIN;
+
 // Enforced. Every directive here holds without a nonce, so none of it depends on how
 // Next renders. frame-ancestors also covers what X-Frame-Options used to.
 const enforcedCsp = [
@@ -54,6 +62,11 @@ const nextConfig = {
   // App routes opt into dynamic individually.
   reactStrictMode: true,
   poweredByHeader: false,
+
+  async rewrites() {
+    if (!apiOrigin) return [];
+    return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
+  },
 
   async redirects() {
     if (!canonicalHost || !redirectHost) return [];

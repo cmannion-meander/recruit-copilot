@@ -11,14 +11,14 @@ There is no score. There is no ranked shortlist. Those are not omissions.
 
 ## Getting started
 
-The marketing site is the only part that runs today. Node 24 — the version is pinned in
-`web/.nvmrc` and matches the deployed runtime, so a mismatch is worth avoiding.
+Node 24 — the version is pinned in `web/.nvmrc` and matches the deployed runtime, so a
+mismatch is worth avoiding.
 
 ```bash
 cp .env.example .env      # web/ reads this too; see next.config.mjs
 nvm use                   # in web/, or install 24 first
 cd web && pnpm install
-pnpm dev                  # http://localhost:3000
+pnpm dev                  # http://localhost:3000 (or :3001 if :3000 is taken)
 ```
 
 Everything else in `web/`:
@@ -35,16 +35,38 @@ The two capture forms post to `/api/capture`, which subscribes to a Mailjet cont
 Without credentials it refuses with a 503 that tells the visitor to write in — deliberately,
 rather than confirming a sign-up it did not record. `.env.example` lists what it needs.
 
-The database and the API are not wired up yet:
+### The API and the cockpit
+
+The backend is a real Django project under `api/`, and the `/prototype` cockpit runs
+against it — not fixtures — once both are up.
 
 ```bash
-./db/setup-local.sh                          # local Postgres, two roles
-uv run pytest api/tests/test_invariants.py -v   # expect failures — that is the point
+./db/setup-local.sh                     # local Postgres, three roles (see docs/decisions/0014)
+cd api && uv sync
+uv run manage.py migrate                # runs as rcp_owner
+uv run manage.py seed_demo              # a demo org with flagged records; prints the login
+uv run manage.py runserver 8000
+
+# separately, in web/, with DJANGO_API_ORIGIN=http://localhost:8000 in .env:
+pnpm dev
 ```
 
-There is no Django project to migrate. `api/` holds the invariant tests and nothing else
-until slice 0 of the API, and those tests are expected to fail until the slices that satisfy
-them land.
+Open `http://localhost:3000/prototype` (or whatever port Next chose) and sign in with the
+username and password `seed_demo` printed. `next.config.mjs` proxies `/api/*` to Django —
+same origin from the browser's point of view, so the session cookie just works; see the
+comment beside `apiOrigin` there, and ADR 0017 for the one deliberately unauthenticated
+read (the candidate token view).
+
+The contract:
+
+```bash
+cd api && uv run pytest tests/test_invariants.py -v   # the ten invariants, plus tenancy
+```
+
+Every test in that file passes as of the current build. `docs/backend-prd.md` is the plan
+it was built against, milestone by milestone; `docs/decisions/` (gitignored — deployment
+and schema decisions specific to this checkout, see `CLAUDE.md`) has the reasoning behind
+each non-obvious call.
 
 ## Layout
 
@@ -55,14 +77,16 @@ docs/data-model.md     entities and the rules that are painful to retrofit
 docs/slices.md         build order, slices 0–11, with 2–5 specified
 docs/deployment.md     App Service notes and the gotchas that cost an evening
 brand/tokens.css       colour and type — source of truth, also pasted into v0
-web/                   the Next 15 app: marketing routes static, app shell, capture endpoint
+web/                   the Next 15 app: marketing routes static, /prototype the cockpit
+web/app/(prototype)/_state/api.ts   the one file that knows the Django backend exists
 web/app/tokens.css     generated copy of brand/tokens.css — scripts/tokens.mjs checks it
 web/app/tokens-derived.css   the few values the brand book has no entry for, with ratios
 prompts/               kickoff prompts for Claude Code and v0
 infra/create-prod.sh   provisions production — local only, see below
-docs/decisions/        ADRs — 0001, 0008 and 0009 ship; 0002–0007 are local only
-db/setup-local.sh      why local Postgres has two roles, neither superuser
-api/tests/             the contract
+docs/decisions/        ADRs — 0001, 0008 and 0009 ship; the rest are local only
+docs/backend-prd.md    the API's plan, milestone by milestone
+db/setup-local.sh      why local Postgres has three roles, none of them superuser
+api/                   the Django project — models, migrations, the contract in tests/
 ```
 
 Two paths are marked local only. `infra/create-prod.sh` and ADRs 0002–0007 record how *our*

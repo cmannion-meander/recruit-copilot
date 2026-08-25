@@ -1,6 +1,7 @@
 from django.urls import path
 
 from candidacies import views as candidacy_views
+from common.views import workspace_view
 from crosscheck import views as crosscheck_views
 from documents import views as document_views
 from findings import views as finding_views
@@ -12,6 +13,7 @@ from submissions import views as submission_views
 
 urlpatterns = [
     path("api/session", organization_views.session_view),
+    path("api/workspace", workspace_view),
     path("api/roles/<uuid:role_id>/criteria", role_views.add_criterion_view),
     path("api/roles/<uuid:role_id>/open", role_views.open_role_view),
     path("api/criteria/<uuid:criterion_id>/assign", role_views.assign_criterion_view),

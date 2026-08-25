@@ -60,6 +60,9 @@ export function reducer(state: State, action: Action): State {
     case "reset":
       return initialPrototypeState;
 
+    case "__hydrate":
+      return { ...action.payload, seq: state.seq };
+
     // ── The Brief ─────────────────────────────────────────────────────────────
 
     case "add_criterion": {

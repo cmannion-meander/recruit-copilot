@@ -14,6 +14,11 @@ export type PassageSource =
 export type Action =
   /** Back to the fixture state, exactly. */
   | { type: "reset" }
+  /** Replace state with a fresh read from the server. Not a user action — the wired
+   * provider dispatches this after login and after every command settles, so the
+   * server stays the truth and the reducer above stays exactly what it was for the
+   * fixture-only prototype. seq carries over; everything else is replaced. */
+  | { type: "__hydrate"; payload: PrototypeState }
 
   // ── The Brief ─────────────────────────────────────────────────────────────────
   /** The third criterion the client was coming back with. */
