@@ -85,6 +85,10 @@ class DecisionEvent(DerivesOrganization, models.Model):
         # Not in the prototype's reducer action union — the one writer that is not a user
         # command. See docs/backend-prd.md, "Designed, not transcribed."
         AUTO_CLOSED = "auto_closed"
+        # Also not in the prototype's action union: the reducer never modeled hiring as
+        # a transition (its fixtures simply hold already-placed candidacies). Added for
+        # the same reason auto_closed was — a real event needs a real type.
+        PLACED = "placed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(
@@ -126,6 +130,7 @@ class DecisionEvent(DerivesOrganization, models.Model):
                         "deadline_extended",
                         "checkpoint_recorded",
                         "auto_closed",
+                        "placed",
                     ]
                 ),
                 name="decision_event_type_valid",

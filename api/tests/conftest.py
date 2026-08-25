@@ -18,6 +18,7 @@ from django.utils import timezone
 from candidacies.services import create_candidacy
 from channels.models import Channel
 from clients.models import Client
+from crosscheck.models import CrosscheckSignal
 from findings.models import Finding
 from organizations.models import Organization, User
 from people.models import Person
@@ -286,3 +287,45 @@ def review_missing_two_findings(organization, person):
                 recorded_by=user,
             )
     return rv
+
+
+@pytest.fixture
+def candidacy_with_open_signal(organization, person):
+    """A fully-evidenced candidacy — every criterion in the pinned Brief has a finding
+    — with one open crosscheck signal, isolating invariant 5's crosscheck half from its
+    whole-rubric half: create_submission must refuse on the signal, not on coverage."""
+    with transaction.atomic():
+        set_org_context(organization)
+        role = build_role(organization, n_criteria=3, assigned=3, title="Signal Role")
+        role.open()
+        user = role.brief.versions.first().created_by
+        channel = Channel.objects.create(
+            organization=organization, name="Referral", kind=Channel.Kind.REFERRAL
+        )
+        candidacy = create_candidacy(role, person, channel, actor=user)
+        rv = Review.objects.create(
+            candidacy=candidacy,
+            brief_version=candidacy.brief_version,
+            brief_stage=candidacy.brief_stage,
+            created_by=user,
+        )
+        assignments = candidacy.brief_stage.criterion_assignments.select_related("criterion")
+        for assignment in assignments:
+            Finding.objects.create(
+                review=rv,
+                criterion=assignment.criterion,
+                status=Finding.Status.NOT_FOUND,
+                recorded_by=user,
+            )
+        CrosscheckSignal.objects.create(
+            candidacy=candidacy,
+            type=CrosscheckSignal.Type.DOCUMENT_AUTHOR,
+            detail="The document's author metadata names someone other than the candidate.",
+            artifact={
+                "kind": "document_property",
+                "document_id": "00000000-0000-0000-0000-000000000000",
+                "property": "author",
+                "value": "Someone Else",
+            },
+        )
+    return candidacy

@@ -413,6 +413,69 @@ def test_submission_blocked_while_crosscheck_signal_unresolved(candidacy_with_op
         create_submission(candidacy_with_open_signal)
 
 
+@pytest.mark.django_db
+def test_submission_succeeds_once_signals_are_resolved(candidacy_with_open_signal):
+    """
+    The ordinary path, deliberately (docs/prototype-findings.md §15): a guard proven
+    only by its own refusal is a guard nobody has shown admits the real thing.
+    Resolving the one open signal on an otherwise fully-evidenced candidacy lets the
+    submission through, with a frozen snapshot and its own unguessable link.
+    """
+    from crosscheck.services import resolve_signal
+    from submissions.services import create_submission
+
+    candidacy = candidacy_with_open_signal
+    user = candidacy.reviews.first().created_by
+    resolve_signal(
+        candidacy.crosscheck_signals.get(),
+        note="Checked against the org's own records — not a match.",
+        actor=user,
+    )
+
+    record = create_submission(candidacy, actor=user)
+
+    assert record.reference
+    assert record.candidate_link_id
+    assert len(record.snapshot["lines"]) == 3
+    assert all(line["status"] == "not_found" for line in record.snapshot["lines"])
+    assert candidacy.messages.filter(kind="submission").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_candidate_view_resolves_by_link_id(candidacy_with_open_signal):
+    """
+    ADR 0017: the candidate view crosses RLS through one SECURITY DEFINER function,
+    owned by a role that cannot log in. This proves the crossing works on the role the
+    application actually runs as (rcp_app, via the shared APP_DSN connection), with no
+    org context set — the same conditions a real unauthenticated candidate request
+    arrives under. transaction=True and a real commit: a raw connection cannot see an
+    uncommitted row regardless of whether the function works at all.
+    """
+    from django.db import transaction
+
+    from crosscheck.services import resolve_signal
+    from submissions.services import create_submission
+
+    candidacy = candidacy_with_open_signal
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('app.current_org', %s, true)", [str(candidacy.organization_id)]
+            )
+        user = candidacy.reviews.first().created_by
+        resolve_signal(candidacy.crosscheck_signals.get(), note="Checked.", actor=user)
+        record = create_submission(candidacy, actor=user)
+        link_id = record.candidate_link_id
+        reference = record.reference
+
+    with psycopg.connect(APP_DSN) as conn:
+        row = conn.execute("SELECT candidate_view_by_token(%s)", (link_id,)).fetchone()
+    payload = row[0]
+    assert payload["reference"] == reference
+    assert payload["snapshot"]["lines"]
+    assert payload["messages"], "the candidate's own message history did not come through"
+
+
 # --------------------------------------------------------------------------------------
 # Invariants 6, 7, 8 — closure, notice, immutability
 # --------------------------------------------------------------------------------------
@@ -421,6 +484,36 @@ def test_submission_blocked_while_crosscheck_signal_unresolved(candidacy_with_op
 @pytest.mark.django_db
 def test_every_candidacy_has_an_auto_close_deadline(candidacy):
     assert candidacy.auto_close_at is not None
+
+
+@pytest.mark.django_db
+def test_checkpoint_records_with_a_note(candidacy):
+    """Placement and PlacementCheckpoint exist from the moment an offer is signed
+    (ADR 0011). A checkpoint records what happened, in words, on a date — proving the
+    day-7 checkpoint created alongside the placement actually accepts a real recording,
+    not just that the schema can hold one."""
+    from datetime import date
+
+    from placements.services import create_placement, record_checkpoint
+
+    user = candidacy.role.brief.versions.first().created_by
+    placement = create_placement(
+        candidacy, started_on=date(2026, 1, 5), probation_ends_on=date(2026, 4, 5), actor=user
+    )
+    assert {c.day for c in placement.checkpoints.all()} == {7, 30, 60, 90}
+
+    seven_day = placement.checkpoints.get(day=7)
+    record_checkpoint(
+        seven_day,
+        note="Settling in well, ahead of the objectives set at the offer stage.",
+        brief_feedback="",
+        actor=user,
+    )
+
+    seven_day.refresh_from_db()
+    assert seven_day.recorded_at is not None
+    assert seven_day.recorded_by_id == user.id
+    assert candidacy.events.filter(type="checkpoint_recorded").exists()
 
 
 @pytest.mark.django_db(transaction=True)

@@ -74,6 +74,9 @@ INSTALLED_APPS = [
     "reviews",
     "evidence",
     "findings",
+    "crosscheck",
+    "submissions",
+    "placements",
 ]
 
 MIDDLEWARE = [

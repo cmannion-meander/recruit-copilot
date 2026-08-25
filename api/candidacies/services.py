@@ -212,9 +212,10 @@ def reject_candidacy(candidacy, *, reason_code, reason_text, actor):
             sent_by=actor,
             body=reason_text.strip(),
         )
+        candidacy.brief_stage = None
         candidacy.terminal_stage = TerminalStage.REJECTED
         candidacy.closed_at = timezone.now()
-        candidacy.save(update_fields=["terminal_stage", "closed_at"])
+        candidacy.save(update_fields=["brief_stage", "terminal_stage", "closed_at"])
         DecisionEvent.objects.create(
             candidacy=candidacy,
             type=DecisionEvent.Type.REJECTED,
@@ -239,9 +240,10 @@ def close_overdue_candidacy(candidacy):
                 "were given. It has closed, as you were told it would."
             ),
         )
+        candidacy.brief_stage = None
         candidacy.terminal_stage = TerminalStage.CLOSED_NO_RESPONSE
         candidacy.closed_at = timezone.now()
-        candidacy.save(update_fields=["terminal_stage", "closed_at"])
+        candidacy.save(update_fields=["brief_stage", "terminal_stage", "closed_at"])
         DecisionEvent.objects.create(
             candidacy=candidacy,
             type=DecisionEvent.Type.AUTO_CLOSED,
